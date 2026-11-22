@@ -1,1 +1,649 @@
-PLACEHOLDER_REPLACE_WITH_FULL
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核心意义词库</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="词库">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1a1a1a;--sub:#666;--accent:#3b82f6;--familiar:#10b981;--uncertain:#f59e0b;--mastered:#8b5cf6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px 16px 120px;color:var(--text)}
+header{width:100%;max-width:480px;text-align:center;margin-bottom:16px}
+header h1{font-size:18px;font-weight:600}
+.stats{font-size:13px;color:#666;margin:6px 0 10px}
+.mode-switch{display:flex;justify-content:center;gap:8px;margin-bottom:16px}
+.mode-btn{padding:8px 20px;border:none;border-radius:999px;background:#e5e7eb;font-size:14px;cursor:pointer}
+.mode-btn.active{background:var(--accent);color:#fff}
+.card-container,.test-container{width:100%;max-width:420px}
+.card{background:var(--card);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.08);min-height:320px;padding:36px 28px;cursor:pointer;user-select:none}
+.card.expanded{min-height:auto}
+.front{text-align:center;padding:40px 0 20px}
+.word{font-size:36px;font-weight:700}
+.pos{margin-top:12px;font-size:15px;color:var(--sub);background:#f0f0f0;display:inline-block;padding:4px 14px;border-radius:999px}
+.hint{margin-top:24px;font-size:13px;color:#aaa}
+.back{display:none;margin-top:20px;border-top:1px solid #eee;padding-top:20px;text-align:left}
+.card.expanded .back{display:block}
+.section-title{font-size:13px;font-weight:600;color:var(--accent);margin:16px 0 6px}
+.content{font-size:15px;line-height:1.7;color:#333}
+.examples li{margin:6px 0;font-size:14px}
+.actions{width:100%;max-width:420px;display:flex;gap:10px;margin-top:28px}
+.btn{flex:1;padding:14px 8px;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer}
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.25);opacity:0.7} }
+.speaking { animation: pulse 0.5s ease-in-out infinite; }
+.btn-familiar{background:#ecfdf5;color:var(--familiar)}
+.btn-uncertain{background:#fffbeb;color:var(--uncertain)}
+.btn-mastered{background:#f5f3ff;color:var(--mastered)}
+.test-container{display:none}
+.test-container.active{display:block}
+.test-card{background:var(--card);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.08);padding:28px 24px}
+textarea{width:100%;min-height:100px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;font-size:15px;font-family:inherit}
+.judge-btns{display:flex;gap:10px;margin-top:16px}
+.export-btn{margin-top:20px;width:100%;padding:12px;background:#111;color:#fff;border:none;border-radius:12px;font-size:14px;cursor:pointer}
+.records{margin-top:16px;font-size:13px;color:var(--sub);text-align:center}
+#loading{text-align:center;padding:40px;color:#999}
+</style>
+</head>
+<body>
+<header>
+  <h1>核心意义词库 · B001（200词）</h1>
+  <div class="stats" id="statsBar">今日学习：<span id="todayCount">0</span> · 总掌握：<span id="masteredCount">0</span> · 检测记录：<span id="recordCountHeader">0</span></div>
+  <div style="margin:6px 0 10px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+    <select id="categorySelect" style="padding:6px 12px;border-radius:999px;border:1px solid #e5e7eb;font-size:13px;background:#fff">
+      <option value="all">全部分类</option>
+    </select>
+    <button id="btnManageCat" style="padding:6px 12px;border:none;border-radius:999px;background:#f3f4f6;font-size:13px;cursor:pointer">管理分类</button>
+  </div>
+  <div class="mode-switch">
+    <button class="mode-btn active" id="modeLearn">卡片学习</button>
+    <button class="mode-btn" id="modeTest">造句检测</button>
+    <button class="mode-btn" id="modeImport">导入词库</button>
+    <button class="mode-btn" id="modeProgress">学习记录</button>
+  </div>
+</header>
+
+<div id="progressPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:400px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15);max-height:70vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">学习记录</div>
+      <button id="closeProgress" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <div id="progressList" style="font-size:14px"></div>
+  </div>
+</div>
+
+<div id="listPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px 20px">
+  <div style="width:100%;max-width:420px;background:#fff;border-radius:16px;padding:16px;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid #eee;z-index:1">
+      <div style="font-size:15px;font-weight:600">单词总览 <span id="listCount" style="font-weight:400;color:#3b82f6"></span></div>
+      <button id="closeList" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <input id="listSearch" placeholder="搜索单词…" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-bottom:8px">
+    <select id="listFilter" style="width:100%;padding:6px;border-radius:8px;border:1px solid #e5e7eb;font-size:13px;margin-bottom:10px">
+      <option value="all">全部</option>
+      <option value="unmarked">未标记</option>
+      <option value="familiar">熟悉</option>
+      <option value="uncertain">不确定</option>
+      <option value="mastered">已掌握</option>
+    </select>
+    <div id="wordList" style="font-size:14px"></div>
+  </div>
+</div>
+
+<div id="catManagePanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:110;align-items:flex-start;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:380px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">管理分类</div>
+      <button id="closeCatManage" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <div style="font-size:13px;color:#666;margin-bottom:8px">选择要操作的分类：</div>
+    <select id="catToEdit" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:10px"></select>
+    <div id="renameBox" style="display:none;margin-bottom:12px">
+      <input id="newCatName" placeholder="输入新的分类名称" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-bottom:8px">
+      <button id="btnConfirmRename" class="btn" style="width:100%;background:#3b82f6;color:#fff">确认改名</button>
+    </div>
+    <div id="mergeBox" style="display:none;margin-bottom:12px">
+      <div style="font-size:13px;color:#666;margin-bottom:6px">选择要合并进的目标分类：</div>
+      <select id="mergeTarget" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:8px"></select>
+      <button id="btnConfirmMerge" class="btn" style="width:100%;background:#8b5cf6;color:#fff">确认合并</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btnRenameCat" class="btn" style="flex:1;background:#3b82f6;color:#fff">改名</button>
+      <button id="btnMergeCat" class="btn" style="flex:1;background:#8b5cf6;color:#fff">合并</button>
+    </div>
+    <div id="catManageResult" style="font-size:13px;color:#10b981;min-height:20px"></div>
+  </div>
+</div>
+
+<div id="importPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px 20px">
+  <div style="width:100%;max-width:420px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:600">导入 Markdown 词库</div>
+      <button id="closeImport" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <textarea id="importText" placeholder="把您的 MD 内容粘贴到这里（支持多词条）…" style="width:100%;min-height:140px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-family:monospace"></textarea>
+    <div style="margin:10px 0;font-size:12px;color:#888">或选择文件：</div>
+    <input type="file" id="importFile" accept=".md,.txt,.markdown" style="font-size:13px">
+    <button id="btnDoImport" class="btn" style="margin-top:12px;background:#111;color:#fff;width:100%">开始导入</button>
+    <div id="importResult" style="margin-top:10px;font-size:13px;color:#10b981"></div>
+  </div>
+</div>
+<div id="loading">正在加载词库…</div><div id="debug" style="font-size:12px;color:#999;text-align:center;margin:8px 0"></div>
+<div class="card-container" id="learnMode" style="display:none">
+  <div class="card" id="card">
+    <div class="front">
+      <div class="word" id="word"></div>
+      <div class="phonetic" id="phonetic" style="margin-top:6px;font-size:16px;color:#555;font-family:serif"></div>
+      <div class="pos" id="pos"></div>
+      <div style="margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center">
+        <button class="btn" id="btnPlayUK" style="width:32px;height:32px;border-radius:50%;padding:0;font-size:15px;background:#f0f9ff;color:#0369a1;display:flex;align-items:center;justify-content:center;transition:all .15s" title="英音">🔊</button>
+        <span style="font-size:11px;color:#888">英</span>
+        <button class="btn" id="btnPlayUS" style="width:32px;height:32px;border-radius:50%;padding:0;font-size:15px;background:#f0fdf4;color:#166534;display:flex;align-items:center;justify-content:center;transition:all .15s" title="美音">🔊</button>
+        <span style="font-size:11px;color:#888">美</span>
+        <span id="speakingStatus" style="font-size:11px;color:#3b82f6;margin-left:4px;min-width:70px"></span>
+      </div>
+      <div class="hint" id="hint">点击卡片查看核心感觉</div>
+    </div>
+    <div class="back" id="back">
+      <div class="section-title">核心感觉</div>
+      <div class="content" id="sense"></div>
+      <div class="section-title">想象画面</div>
+      <div class="content" id="scene"></div>
+      <div class="section-title">例句</div>
+      <ul class="examples" id="examples"></ul>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-uncertain" id="btnUncertain">不确定</button>
+    <button class="btn btn-familiar" id="btnFamiliar">熟悉</button>
+    <button class="btn btn-mastered" id="btnMastered">已掌握</button>
+      <button class="btn" id="btnNext" style="background:#e0e7ff;color:#3730a3">下一个</button>
+  </div>
+</div>
+<div class="test-container" id="testMode">
+  <div class="test-card">
+    <div class="word" id="testWord" style="text-align:center;font-size:28px"></div>
+    <div class="phonetic" id="testPhonetic" style="text-align:center;margin:4px 0;font-size:15px;color:#555"></div>
+    <div class="pos" id="testPos" style="display:block;text-align:center;margin:8px auto"></div>
+    <div class="section-title">提示（核心感觉）</div>
+    <div class="prompt" id="testPrompt"></div>
+    <textarea id="sentenceInput" placeholder="请根据上面的感觉，用这个单词造一个英文句子…"></textarea>
+    <div class="judge-btns">
+      <button class="btn btn-familiar" id="btnOk" style="flex:1">我觉得还行</button>
+      <button class="btn btn-uncertain" id="btnUnsure" style="flex:1">不太确定</button>
+    </div>
+    <div id="feedback" style="text-align:center;margin-top:12px;font-size:14px;min-height:20px"></div>
+    <div class="section-title" style="margin-top:20px">参考例句</div>
+    <ul class="examples" id="testExamples"></ul>
+  </div>
+  <button class="export-btn" id="btnExport">导出检测记录（表格）</button>
+  <div class="records" id="recordCount">已记录 0 条</div>
+</div>
+<script id="wordsData" type="application/json">[{"w":"withdraw","ph":"/wɪðˈdrɔː/","p":"动词","s":"把原本伸进去、放进去、参与进去的东西，抽回来。动作方向始终是\"里 → 外\"或\"参与 → 退出\"。","c":"手伸进柜子取钱，取完把手收回；或一个人本来站在队伍里，后退一步站到队外。钱、提议、参赛资格都像这只手，能被\"抽出来\"。","e":["I withdrew 2,000 yuan before the trip, because the village has no cash machine.","Two teams withdrew from the tournament after the flood."]},{"w":"clamp","ph":"/klæmp/","p":"动词／名词","s":"用外力把两样东西\"咬住、夹死\"，让它们不能动。核心不是\"固定\"这个结果，而是\"两侧同时压紧\"这个动作。","c":"木工把两块板对齐，用一个 C 形铁夹从两边拧紧，板子立刻不动了；或一只蟹钳夹住手指，越挣扎越紧。","e":["Clamp the two pieces of wood together and leave them overnight.","She clamped her hand over the phone so the caller wouldn't hear us."]},{"w":"fracture","ph":"/ˈfræktʃə(r)/","p":"名词／动词","s":"原本连续、完整的一整块，出现了一道断开。名词是\"那道断\"，动词是\"断开来\"。","c":"一根干树枝被踩了一脚，中间裂开一条线，但还没完全掉下来；医院片子上的骨头也是这样一条线。","e":["She suffered a small fracture in her wrist after the fall.","The pipe fractured under the weight of the snow."]},{"w":"transplant","ph":"动词 /trænsˈplɑːnt/","p":"动词／名词","s":"把一样活的东西连根带土地挪到另一个地方，让它在那儿继续活。核心是\"换位置后继续生长／工作\"。","c":"从苗圃里挖出一株带土的苗，栽进自家院子；器官移植像是把\"零件\"从一个身体搬到另一个身体，接上血管继续工作。","e":["The kidney was transplanted from a donor into a nine-year-old boy.","We transplanted the tomatoes after the last frost."]},{"w":"soar","ph":"/sɔː(r)/","p":"动词","s":"几乎不用力气地、平顺地往上升，而且升得高、持续在高处。没有\"挣扎\"的意思。","c":"一只鹰张开翅膀，不扇几下就顺着热气流盘旋上去，越来越小；温度计的红色液柱也是这样一路往上走。","e":["Housing prices have soared since the new subway opened.","A single eagle soared above the valley for ten minutes."]},{"w":"sustain","ph":"/səˈsteɪn/","p":"动词","s":"从下面托住，使某样东西不塌、不断、不减弱地继续下去。托住的是重量、生命、速度、说法。","c":"一只手在下面托着一摞书，书才不会倒；或者给火堆不断添柴，火才一直烧着不灭。","e":["The soil here cannot sustain such intensive farming.","She sustained a knee injury in the second half."]},{"w":"impose","ph":"/ɪmˈpəʊz/","p":"动词","s":"从上往下把一样东西\"压\"到别人身上，对方没有拒绝的余地。压的可以是税、规则、惩罚、观点，也可以是自己这个人。","c":"一只手掌把印章按到纸面上，纸没有商量的份；或者一个人不请自来地坐到你家客厅，把存在感压在别人身上。","e":["The city imposed a new tax on empty flats.","Don't impose your schedule on everyone else."]},{"w":"derive","ph":"/dɪˈraɪv/","p":"动词","s":"从某个源头\"引出来\"。像水渠从河里引水：东西本来在源头，被引到别处，或说明它来自那里。","c":"一条小河从山上的泉眼流下来，村子里的水缸接的就是这条河；\"词源\"就是这条水路。","e":["The word \"salary\" derives from the Latin for salt.","She derives a lot of satisfaction from teaching."]},{"w":"acknowledge","ph":"/əkˈnɒlɪdʒ/","p":"动词","s":"本来可以装作不知道，现在公开表示\"我知道、我认了\"。承认的对象可以是事实、身份、收到的东西、别人的存在或帮助。","c":"有人在你面前挥手，你点头回应——这个点头就是 acknowledge：你确认\"我看见了\"。换成法庭上，点头变成一句\"是的，我做过\"。","e":["The company acknowledged that the data had been leaked.","She is widely acknowledged as the best coach in the province."]},{"w":"retain","ph":"/rɪˈteɪn/","p":"动词","s":"手里一直握着，不让它流走、散掉、被拿走。时间过去，关系不变。","c":"一个漏水的桶，你用手按住底下的洞，水就留在桶里；retain 就是那只一直按着的手。","e":["The old factory still retains its original brick walls.","Dry soil retains very little water."]},{"w":"approach","ph":"/əˈprəʊtʃ/","p":"名词／动词","s":"距离在缩小——空间上走近、时间上临近、关系上开始接触、思路上开始着手。核心是\"从远处向目标靠过去\"。","c":"你从远处朝一扇门走，门越来越近；面对一道难题时，也可以想象\"从哪一边靠过去、先碰哪一块\"。","e":["As we approached the station, it began to rain.","She approached her boss about a pay rise."]},{"w":"issue","ph":"/ˈɪʃuː/","p":"名词／动词","s":"\"放出来\"——把东西从里面发出去，或把一件事摆到台面上让大家看。名词是\"被放出来的那一份／那件事\"，动词是\"放出去\"。","c":"印刷机吐出一叠新印的杂志，一份份发到报摊；或者有人把一个议题摆到会议桌上，所有人开始讨论它。","e":["Housing is the biggest issue in this election.","There's an issue with my bank card—it keeps getting rejected."]},{"w":"charge","ph":"/tʃɑːdʒ/","p":"动词／名词","s":"把\"一份东西\"装到某个对象上——装的是钱、电、罪名、任务，或者把自己整个人\"装\"过去撞向对方。这个画面只负责联系一部分用法。","c":"往一个空电池里灌电，电被\"装\"进去；账单上的金额被\"记\"到你的账上；警察把一项罪名\"挂\"到你身上。三者都是\"往一个载体上加载\"。","e":["They charge eight dollars for delivery.","I need to charge my phone before we leave."]},{"w":"discipline","ph":"/ˈdɪsəplɪn/","p":"名词／动词","s":"用一套规矩把人（或自己）\"箍\"住，让行为不散开。箍的力量可以来自外部惩罚，也可以来自内部自我约束；被箍住的那个范围，后来也指一门\"训练有素的学问\"。","c":"军训时一排人站得笔直，谁动一下就被纠正；或者一个学生每天六点起床读书，没有人管，但他自己把自己\"箍\"住了。","e":["The school is known for its strict discipline.","Learning a language takes discipline more than talent."]},{"w":"commission","ph":"/kəˈmɪʃn/","p":"名词／动词","s":"正式把一件事\"托付\"出去。托付的对象可以是一项调查（成立委员会）、一件作品（下订单）、一个销售任务（付佣金），或一个军职（授予委任）。","c":"一个人把一封盖了章的信交给另一个人：\"这件事交给你办。\"信可以是委托画一幅壁画，也可以是委托查一桩事故。","e":["She earns a 5% commission on every car she sells.","The government set up a commission to investigate the accident."]},{"w":"yield","ph":"/jiːld/","p":"动词／名词","s":"一样东西在压力或耕作下\"让出\"结果——土地让出收成，人不敌压力让出立场，材料受力让出形状。共同点是\"顶不住了，交出来\"。","c":"压一条湿泥，泥慢慢塌下去让出形状；或者两个人对峙推手，一方先松手后退。","e":["The orchard yields about three tonnes of apples a year.","He finally yielded to pressure and signed the deal."]},{"w":"reserve","ph":"/rɪˈzɜːv/","p":"动词／名词","s":"先把一样东西\"划出来、放到一边\"，不让它现在被用掉、被别人拿走。划出来的可以是座位、钱、粮食、土地，也可以是人的话和情绪。","c":"在餐厅桌上放一张\"已预订\"的牌子，那张桌子就从公共资源里被划出去了；仓库里堆着备用的粮食，也是被划出来\"留着以后用\"。","e":["I've reserved a table for four at seven.","These seats are reserved for elderly passengers."]},{"w":"concern","ph":"/kənˈsɜːn/","p":"动词／名词","s":"某件事\"牵涉到\"某人——牵涉的方式可以是影响他、关于他、让他担心，或者是他有责任管。核心是\"与……有关系\"。","c":"一张网，某个结被拉动，连着它的几根线都动；被牵动的人就会关注、担心、负责。","e":["Climate change concerns every country on earth.","Rising rents are a growing concern for students."]},{"w":"critical","ph":"/ˈkrɪtɪkl/","p":"形容词","s":"站在\"判断\"的位置上——要么在挑毛病，要么在做关键判断。\"关键\"这一支来自\"到了必须判断的关口\"。","c":"一个人拿着红笔逐行批改文章，这是\"批评的\"；同一支笔在病历上圈出一个数字，旁边写\"决定生死\"，这是\"关键的\"。","e":["The report was highly critical of the hospital's management.","Timing is critical to the success of this plan."]},{"w":"remote","ph":"/rɪˈməʊt/","p":"形容词／名词","s":"中间隔着一大段距离——空间的距离、时间的距离、关系的距离、可能性的距离。凡是\"离得远\"，都可以用 remote。","c":"一条土路尽头只剩一户人家，四周是山；或者你手里拿着一个小盒子，隔着几米把电视打开——你与机器之间没有线，也是\"远\"。","e":["The clinic serves a dozen remote villages.","She works remotely two days a week and goes in on Fridays."]},{"w":"cancel","ph":"/ˈkænsl/","p":"动词","s":"把一个已经\"排上日程\"的安排划掉，让它不再生效。被划掉的可以是活动、合同、票据上的有效性。","c":"日历上原本用红笔圈出的那个下午，被人用一条斜线划掉——时间还在，事情没了。","e":["They cancelled the flight because of the typhoon.","I cancelled my gym membership after two months."]},{"w":"numerous","ph":"/ˈnjuːmərəs/","p":"形容词","s":"数量多，多到值得单独提一句\"很多\"。它说的是\"数目大\"，不是\"频繁\"。","c":"一片草地上密密麻麻的蒲公英，数不清有多少朵——不是\"经常出现\"，而是\"同时存在着一大堆\"。","e":["Numerous studies have linked sleep loss to weight gain.","She has visited the museum on numerous occasions."]},{"w":"surgeon","ph":"/ˈsɜːdʒən/","p":"名词","s":"用刀进入人体、把里面修好的人。落点在\"动手做手术\"，不在\"看病开药\"。","c":"无影灯下，一双手戴着薄手套，握着器械，旁边一排器械按顺序摆好——这个人负责切开、缝合。","e":["The surgeon operated on her knee for three hours.","He trained as a heart surgeon in Guangzhou."]},{"w":"analyse","ph":"/ˈænəlaɪz/","p":"动词","s":"把一整团东西拆成零件，逐个看清它们的性质与关系，再解释整体。核心动作是\"拆开看\"。","c":"把一块旧手表摊在桌上，齿轮、发条、螺丝一字排开，你看清每个零件怎么咬合，才知道表为什么不走。","e":["We analysed the data from three hundred households.","The lab analysed the soil for heavy metals."]},{"w":"abrupt","ph":"/əˈbrʌpt/","p":"形容词","s":"中间没有过渡，说断就断。用在事情上是\"突然\"，用在说话上是\"硬邦邦、不留缓冲\"。","c":"一段录音被人一刀剪断，声音直接消失；或者一个人说话像把门\"砰\"地关上，不给你接话的缝。","e":["The meeting came to an abrupt end when the power failed.","His abrupt reply made her think she had said something wrong."]},{"w":"spacious","ph":"/ˈspeɪʃəs/","p":"形容词","s":"里面的空地多，人进去不觉得被挤着。说的是\"可活动的余量\"，不是单纯的\"面积数字大\"。","c":"推开门，客厅中间空着一大片地板，家具靠墙站着，你走进去不用侧身。","e":["The new library is bright and spacious.","They moved to a spacious flat with a balcony."]},{"w":"disapproval","ph":"/ˌdɪsəˈpruːvl/","p":"名词","s":"心里认定\"这样不对／不合适\"，于是脸上、话里透出不赞成的凉意。它是一种态度，不一定说出口。","c":"饭桌上有人点了一支烟，母亲没说话，只是把窗户推开、眉头皱了一下——房间里的空气就变了。","e":["Her parents made no secret of their disapproval of the marriage.","He shook his head in disapproval."]},{"w":"spontaneous","ph":"/spɒnˈteɪniəs/","p":"形容词","s":"没有事先排练，从里面自己冒出来。冒出来的可以是动作、笑声、感情，也可以是自然发生的过程。","c":"演出结束，全场没人指挥，掌声忽然一起响起来；或者雨后墙角自己长出一片蘑菇，没人种。","e":["The audience broke into spontaneous applause.","It was a spontaneous trip—we decided at the station."]},{"w":"cafeteria","ph":"/ˌkæfəˈtɪəriə/","p":"名词","s":"自己端托盘、自己选、先付钱再找位子的吃饭地方。核心在\"自助流程\"，不在菜系。","c":"一排不锈钢餐台，前面的人拿着托盘往前走，指着想要的菜，最后在收银台\"滴\"一下，然后端着盘子找空桌。","e":["We grabbed lunch at the hospital cafeteria.","The cafeteria is closed during the summer holidays."]},{"w":"rupture","ph":"/ˈrʌptʃə(r)/","p":"名词／动词","s":"原本包着、连着的东西\"绷不住\"，一下裂开——可以是体内的组织、管道，也可以是国与国之间的关系。","c":"一根充水的水管鼓起来，接缝处\"啪\"地裂开，水喷出来；两国之间原本握着的电话，突然被挂断。","e":["He suffered a rupture of the Achilles tendon during the match.","The pipeline ruptured and flooded the road."]},{"w":"wreck","ph":"/rek/","p":"名词／动词","s":"原本能用的东西被弄到\"散架、不能再用\"的状态。名词是那具残骸，动词是把它弄成那样。","c":"海边搁浅的船，只剩半边壳，桅杆斜插在沙里；或者高速路上的车撞成一团铁。","e":["Divers found the wreck of a fishing boat near the reef.","The crash wrecked two cars but nobody was hurt."]},{"w":"virgin","ph":"/ˈvɜːdʒɪn/","p":"名词／形容词","s":"完全没有被碰过、被用过、被改变过的原初状态。用在人身上指性经验，用在物上指\"原封未动\"。","c":"一片从没被砍过的山林，落叶厚厚地铺着，没有一条人走出来的路；或者刚落下、没人踩过的雪面。","e":["Much of the island is still virgin forest.","This is extra virgin olive oil from Crete."]},{"w":"afflict","ph":"/əˈflɪkt/","p":"动词","s":"一种痛苦从外面压到人身上，持续地折腾他。施动者通常是疾病、灾害、问题，不是人主动去做什么。","c":"一场连绵的雨落在整个村子上，屋顶漏水、路被泡烂，人躲不开，只能挨着。","e":["The region is afflicted by drought almost every year.","She has been afflicted with migraines since childhood."]},{"w":"reproach","ph":"/rɪˈprəʊtʃ/","p":"动词／名词","s":"因为失望而把\"你不该这样\"摆到对方面前。不是暴怒，是带凉意的责备。","c":"一个人不说话，只是看着你，轻轻摇头，说一句\"我没想到你会这样\"——这句话比骂人更重。","e":["She reproached him for forgetting their anniversary again.","He reproached himself for not calling the doctor sooner."]},{"w":"fluctuate","ph":"/ˈflʌktʃueɪt/","p":"动词","s":"数值或状态像水面一样上下起伏，没有稳定在一处，而且反复变。","c":"一只小船停在湖面，波浪一来一去，船身跟着高低起落；体温曲线、股价曲线也是这样的波浪。","e":["Vegetable prices fluctuate between seasons.","Her mood fluctuated wildly during those weeks."]},{"w":"compartment","ph":"/kəmˈpɑːtmənt/","p":"名词","s":"一个大空间被隔成若干小格子，每格各装各的东西。核心是\"被隔开的一格\"。","c":"老式火车车厢里一排小房间，推开门是六个座位和一张小桌；或者书包里那个专门放笔的夹层。","e":["My keys are in the front compartment of the bag.","We shared a compartment with an old couple on the night train."]},{"w":"gloomy","ph":"/ˈɡluːmi/","p":"形容词","s":"光不够，眼前发灰；由这种光线引申为心里也没亮光。一个是\"暗\"，一个是\"没指望\"。","c":"阴天的旧楼道，灯坏了一半，墙是灰的，走上去脚步声很空；窗外也是同样的天色。","e":["The corridor was gloomy even at noon.","He sounded gloomy about his chances of passing."]},{"w":"kidnap","ph":"/ˈkɪdnæp/","p":"动词","s":"把人强行带走并关起来，用这个人当筹码换取东西。核心是\"非法扣人 + 交换目的\"。","c":"一个人被推上面包车，车门关上，窗帘拉死；另一个地方，电话响起，对方开口就报价。","e":["The businessman was kidnapped on his way home.","Police rescued the kidnapped child within twelve hours."]},{"w":"warrant","ph":"/ˈwɒrənt/","p":"名词／动词","s":"一样东西\"够格\"支撑某个行动——一张纸够格让警察进门，一个理由够格让某事发生。","c":"法官在纸上签字，警察把这张纸举到门口；另一边，一个人说\"这点小事不值得你跑一趟\"，也是在衡量\"够不够格\"。","e":["Police need a warrant to search the flat.","The damage is serious enough to warrant a full inquiry."]},{"w":"calculate","ph":"/ˈkælkjuleɪt/","p":"动词","s":"用数字一步步推出结果；引申为根据手上信息\"推算出\"一个判断。","c":"纸上列着竖式，笔尖一行行往下移，最后画一道横线写出总数；或者一个人看着油价、路程、油耗，心里估出这趟要花多少钱。","e":["Calculate the total cost including delivery.","We calculated that the trip would take about six hours."]},{"w":"persistent","ph":"/pəˈsɪstənt/","p":"形容词","s":"不肯停。用在人身上是\"劝不退\"，用在事情上是\"赶不走\"。","c":"一个人站在门外，你说了三次\"今天不见\"，他还在门口等着——这是\"劝不退\"；或者天花板上那盏坏灯每隔几分钟闪一下，整晚不停——这是\"赶不走\"。","e":["She was persistent enough to ask the same question five times.","He has a persistent cough that won't go away."]},{"w":"authorize","ph":"/ˈɔːθəraɪz/","p":"动词","s":"有资格的人点头，某件事才\"算数、可以办\"。授权的是权限，不是帮忙。","c":"一张报销单传到主管桌上，他签了字，财务才肯打款；没有这个签名，单子只是纸。","e":["Only the director can authorize a refund of that size.","The board authorized her to sign the contract on its behalf."]},{"w":"sake","ph":"/seɪk/","p":"名词","s":"\"为了……的缘故\"。它把一件事的目的、受益人或理由点出来，本身不单独使用，几乎只活在 `for ... sake` 这个框里。","c":"一个人忍着不说难听的话，只因为\"不想让场面难看\"——忍住的原因就是那个 sake。","e":["He moved to the coast for the sake of his daughter's health.","I'll explain the rule again, for the sake of clarity."]},{"w":"audience","ph":"/ˈɔːdiəns/","p":"名词","s":"一群\"在听、在看\"的人。重点不在人数，而在\"接收\"这个位置——台上的人说，他们在下面接。","c":"剧场灯暗下来，几百张脸朝着舞台，安静得能听见咳嗽声；或者手机屏幕另一端，几十万人在同一时间点开同一个视频。","e":["The audience clapped for five minutes.","The magazine's audience is mostly students in their twenties."]},{"w":"rehearsal","ph":"/rɪˈhɜːsl/","p":"名词","s":"正式之前，先照着来一遍。核心是\"预演\"，不是\"练习技能\"本身。","c":"空剧场里，演员穿着平时的衣服走位，导演在台下喊\"再来一次，从第二幕开始\"。","e":["We have a dress rehearsal on Thursday evening.","The lockdown was a rehearsal for worse things to come."]},{"w":"sniff","ph":"/snɪf/","p":"动词／名词","s":"用鼻子短促地把气吸进去，发出声音。目的有三种：通鼻子、闻味道、表示不屑。","c":"感冒的人隔几秒吸一下鼻子；狗贴着地面快速吸气；有人听不惯你的话，鼻子一哼，头一偏。","e":["She sniffed and wiped her eyes with the back of her hand.","The dog sniffed at the bag for a long time."]},{"w":"narrative","ph":"/ˈnærətɪv/","p":"名词／形容词","s":"把零散的事情排成一条有因果、有先后、有立场的线。核心是\"编排过的讲法\"，不是\"事情本身\"。","c":"同一场车祸，三个人讲出三个版本：一个强调车速，一个强调路滑，一个强调司机熬夜。事实是同一堆，线不一样。","e":["The film's narrative jumps between 1970 and the present.","She gave a clear narrative of what happened that night."]},{"w":"possess","ph":"/pəˈzes/","p":"动词","s":"某样东西\"在你这儿、归你管\"。可以是财物、品质，也可以是一种情绪\"占住了你\"。","c":"一个人把钥匙攥在手里，房子就是他的；换一种画面，怒气像一只手，反过来把这个人攥住，让他不像平时的自己。","e":["The family possesses three shops in the old town.","She possesses an unusual ability to stay calm."]},{"w":"coincide","ph":"/ˌkəʊɪnˈsaɪd/","p":"动词","s":"两样东西\"落在同一个点上\"——同一个时间、同一个位置，或同一个内容。","c":"两条本来分开的路，在地图上某一点重合；或者两个朋友的生日刚好是同一天，蛋糕只买一个。","e":["The festival coincided with the first week of term.","His account of the accident coincides with the police report."]},{"w":"neutral","ph":"/ˈnjuːtrəl/","p":"形容词／名词","s":"不偏向任何一边，不带电荷、不带酸碱、不带情绪。核心是\"两边都不站\"。","c":"拔河绳中间那条红布，两边都在拉，它自己不属于任何一队；或者调色时把灰调进去，颜色变得不刺眼。","e":["The newspaper tried to stay neutral during the election.","He answered in a neutral voice, giving nothing away."]},{"w":"scratch","ph":"/skrætʃ/","p":"动词／名词／形容词","s":"用尖的东西在表面上\"划一下\"——可以是止痒、留痕、发出声音，也可以是从头开始。","c":"指甲在蚊虫咬的包上快速划几下；钥匙不小心划过车门，留下一条白线；猫在木门上抓出声音。","e":["Don't scratch the mosquito bites—you'll make them worse.","Someone scratched my car in the car park."]},{"w":"analysis","ph":"/əˈnæləsɪs/","p":"名词","s":"把整体拆开、逐层看清之后得到的解释。既可指\"分析这件事\"，也可指\"分析出来的那份结论\"。","c":"一份血液报告：一行行指标被分开列出，最后给出结论；或一张思维导图，把一个大问题拆成五支。","e":["Our analysis shows that most delays happen in the first hour.","The water sample was sent to the lab for analysis."]},{"w":"devise","ph":"/dɪˈvaɪz/","p":"动词","s":"动脑筋\"设计出\"一个原先没有的办法或装置。重点在构思，不在制造。","c":"几个人围着桌子，用笔在纸上画箭头、改流程，最后拍板：\"就这么办。\"东西还没做出来，方案已经成型。","e":["They devised a cheap way to filter the water.","We need to devise a plan before the deadline."]},{"w":"cooperative","ph":"/kəʊˈɒpərətɪv/","p":"形容词／名词","s":"几个人朝同一个目标一起使劲；也可指\"愿意配合、不添乱\"；还指一种大家共同拥有、共享收益的组织。","c":"几个人抬一张长桌，喊一声\"起\"，同时用力；或者一群农户把水果集中起来一起卖，年底按份额分钱。","e":["The two schools run a cooperative exchange programme.","The staff were polite and cooperative throughout."]},{"w":"triple","ph":"/ˈtrɪpl/","p":"限定词／形容词／动词","s":"\"三\"这个数：三倍、三部分、变成三倍。","c":"一杯水倒进三个同样的杯子，正好装满；或者工资单上的数字从 3000 变成 9000，翻了两番，也就是原来的三倍。","e":["Sales tripled in two years.","They booked a triple room for the three of them."]},{"w":"clutch","ph":"/klʌtʃ/","p":"动词／名词","s":"手指突然收紧，抓住不放。抓的人往往在害怕、疼痛或着急；名词则指\"抓紧\"这个动作、抓在手里的东西，或机器里负责\"咬合／松开\"的部件。","c":"孩子怕打针，一把抓住母亲的衣服不松手；或者司机左脚踩下踏板，发动机与车轮\"咬合\"或\"脱开\"。","e":["She clutched the railing as the bus turned.","He clutched at my sleeve and asked me not to go."]},{"w":"temper","ph":"/ˈtempə(r)/","p":"名词／动词","s":"一个人情绪的\"火候\"。火候偏旺，就是容易发火的脾气；火候被调低，就是\"缓和、冲淡\"。","c":"炉子上的火，风一吹就窜起来；有人往汤里加一勺凉水，滚沸立刻平下去——这就是 temper 的两面。","e":["He has a temper, but he never stays angry for long.","She lost her temper with the driver and immediately regretted it."]},{"w":"grope","ph":"/ɡrəʊp/","p":"动词／名词","s":"眼睛用不上，只能靠手一寸寸摸过去找方向或找东西。引申为在不确定中试探。","c":"半夜停电，你伸手沿墙摸开关，指尖一点点挪；或者在一片模糊的局面里，双方都在试探对方的底线。","e":["She groped for the light switch in the dark.","We groped our way down the stairs."]},{"w":"rejoice","ph":"/rɪˈdʒɔɪs/","p":"动词","s":"高兴到要说出来、表现出来。不是心里暗自满意，而是公开的欢欣。","c":"球赛终场哨响，球迷跳起来抱在一起，喊出声；或者村里敲锣打鼓，因为旱情终于结束。","e":["The whole town rejoiced at the news of the rescue.","We rejoiced that no one had been hurt."]},{"w":"frantic","ph":"/ˈfræntɪk/","p":"形容词","s":"动作又快又乱，因为心里已经慌了。快，但没有章法。","c":"出门前找不到钥匙，人把抽屉一个个拉开又推回去，东西掉在地上也顾不上捡。","e":["There was a frantic search for the missing child.","She was frantic with worry when he didn't come home."]},{"w":"tickle","ph":"/ˈtɪkl/","p":"动词／名词","s":"用指尖在敏感处轻轻蹭，制造一阵又痒又笑的细小刺激。引申为\"轻轻撩到\"人的兴趣或虚荣。","c":"手指在脚心轻轻划两下，脚一缩，人笑出声；或者有人夸你一句\"这想法真妙\"，心里被轻轻挠了一下。","e":["He tickled the baby's feet until she laughed.","My throat tickles whenever I drink cold water."]},{"w":"object","ph":"名词 /ˈɒbdʒɪkt/；动词 /əbˈdʒekt/","p":"名词／动词","s":"一样\"摆在面前、能被指着看\"的东西；动词则是\"把它挡在面前\"——反对。","c":"桌上放着一只杯子，你可以指着说\"就是这个\"；换成开会，有人把手一横：\"我不同意。\"","e":["There was a small metal object under the chair.","The object of the survey was to test the new app."]},{"w":"humble","ph":"/ˈhʌmbl/","p":"形容词／动词","s":"把自己放低——不是装低，而是不把自己看得比别人重要。引申为\"地位低、条件差\"，以及\"把傲气压下去\"。","c":"一个真正有本事的人，说话时把功劳推给别人，坐在角落里听；反过来，有人被事实打脸，头低下去，那就是被 humbled。","e":["He is humble about his own achievements.","She came from a humble family in a small town."]},{"w":"commodity","ph":"/kəˈmɒdəti/","p":"名词","s":"可以拿上市场买卖的\"东西\"，通常是被标准化、按量计价的那类。引申为\"有用、可被交换的资源\"。","c":"仓库里一袋袋同规格的小麦，买家不看是哪一袋，只看等级和吨价；换成现代语境，注意力、数据也成了这样一袋袋的东西。","e":["Coffee is one of the world's most traded commodities.","In this industry, skilled workers are a scarce commodity."]},{"w":"cliff","ph":"/klɪf/","p":"名词","s":"一面几乎垂直的高岩壁，边缘一步就到底。核心是\"陡\"和\"落差\"。","c":"站在海边，脚下是白色的岩壁，往下看是浪；风很大，往前一步就没有路了。","e":["The path runs along the top of the cliff.","We stood at the cliff edge and watched the waves."]},{"w":"obedient","ph":"/əˈbiːdiənt/","p":"形容词","s":"听到指令就照做，不顶嘴、不拖延。落点在\"服从\"，不在\"听话可爱\"。","c":"训练场上，口令一下，一排人同时转身；或者一只狗听到\"坐\"，立刻坐下，眼睛还看着主人。","e":["The dog was well trained and completely obedient.","Soldiers are expected to be obedient to orders."]},{"w":"infinite","ph":"/ˈɪnfɪnət/","p":"形容词／名词","s":"找不到尽头，也量不出来。可以是数量极大、时间无终，或空间无边。","c":"夜里抬头，星星一直往后退，退到你数不清的地方；或者一条没有终点的跑道。","e":["Learning a language requires infinite patience.","The universe may be infinite."]},{"w":"misery","ph":"/ˈmɪzəri/","p":"名词","s":"长时间的痛苦，身心都难受，而且看不到好转。比 pain 更\"熬人\"。","c":"一间漏雨的屋子，冬天没有暖气，人生病躺着，日子一天天重复——这不是一下的疼，是持续的苦。","e":["The family lived in misery for years after the factory closed.","The constant noise made her life a misery."]},{"w":"blur","ph":"/blɜː(r)/","p":"名词／动词","s":"边界糊掉，看不分明。可以是眼睛看到的形状，也可以是记忆、概念之间的界线。","c":"车窗外飞速后退的路灯，连成一条条光带；或者一张被水浸过的照片，人脸化开。","e":["Everything outside the window was a blur.","Tears blurred her vision."]},{"w":"suffice","ph":"/səˈfaɪs/","p":"动词","s":"\"够了\"——不需要再加。语气正式，常用来收住话头或说明最低限度。","c":"桌上摆着一碗饭、一碟菜，主人说\"这些就够了\"，不再上菜。","e":["A short email should suffice.","Suffice it to say that the meeting did not go well."]},{"w":"concede","ph":"/kənˈsiːd/","p":"动词","s":"本来顶着不让，后来松口承认或让出。核心是\"不情愿地退一步\"。","c":"两个人在争论，一个先坚持，后来叹了一口气：\"好吧，你说得对。\"这一口气就是 concede。","e":["He finally conceded that the data might be wrong.","The candidate conceded defeat just before midnight."]},{"w":"notable","ph":"/ˈnəʊtəbl/","p":"形容词／名词","s":"值得被单独点出来。不一定是最好，但\"不能略过\"。","c":"一长串名单里，有一个名字被红笔圈起来——因为它和别的不一样，值得一提。","e":["The town is notable for its seventeenth-century bridge.","There has been a notable improvement in air quality."]},{"w":"plausible","ph":"/ˈplɔːzəbl/","p":"形容词","s":"听起来站得住脚，让人愿意先信一半。注意：它只说\"像真的\"，不说\"是真的\"。","c":"一个人在解释迟到的原因，时间、路线、细节都对得上，你点头——但监控还没调出来。","e":["She gave a plausible excuse for missing the deadline.","It sounds plausible, but we need evidence."]},{"w":"equator","ph":"/ɪˈkweɪtə(r)/","p":"名词","s":"地球正中间那条假想的横线，把南北两半球分成一样大。","c":"一个橙子，用刀在正中间横着划一圈，那条线离两端一样远——只是地球上的这条线看不见。","e":["The country lies just north of the equator.","Temperatures near the equator change little during the year."]},{"w":"staircase","ph":"/ˈsteəkeɪs/","p":"名词","s":"建筑物里一整段带扶手的楼梯，从这一层通到那一层。是一整套，不是一级台阶。","c":"老房子进门就是一道木楼梯，扶手被摸得发亮，转角处有个小平台。","e":["The staircase creaks whenever someone walks up.","A narrow staircase leads to the roof."]},{"w":"flip","ph":"/flɪp/","p":"动词／名词","s":"手腕一抖，让东西快速翻个面或弹出去。动作轻、快、幅度小。","c":"拇指一顶，硬币在空中翻了个身落回手心；或者用指尖把书页\"啪\"地翻过去。","e":["She flipped the pancake neatly.","Flip the switch and the machine starts."]},{"w":"rational","ph":"/ˈræʃnəl/","p":"形容词","s":"按道理走，不按情绪走。有理由、能说清、可检验。","c":"两个人在算这笔买卖划不划算，把成本、风险、期限一项项摆出来，而不是凭\"我觉得会火\"。","e":["There is no rational reason to buy now.","She stayed rational even when everyone else panicked."]},{"w":"barricade","ph":"/ˈbærɪkeɪd/","p":"名词／动词","s":"临时堆起来的一道\"墙\"，用来挡住人或车通过。材料通常是手边有什么就用什么。","c":"街上几只旧沙发、几张桌子、几个垃圾桶被横着推到一起，后面站着一排人。","e":["Protesters built a barricade out of bins and chairs.","Police barricaded the street before the parade."]},{"w":"resume","ph":"/rɪˈzjuːm/","p":"动词","s":"停下来之后，从原来的地方接着往下做。不是重新开始，是\"续上\"。","c":"会议中场休息，大家去倒水，回来坐下，主持人说\"我们接着刚才那条继续\"。","e":["Talks will resume on Monday morning.","She resumed reading as if nothing had happened."]},{"w":"provocative","ph":"/prəˈvɒkətɪv/","p":"形容词","s":"故意去\"戳\"，让对方有反应——可能是愤怒、争论，也可能是性方面的反应。","c":"有人专挑最敏感的话题开口，眼睛却在看大家的脸色；或者一张海报只用一句话，就让人非评论不可。","e":["He made a provocative remark about the referee and was sent off.","The poster was deliberately provocative."]},{"w":"committee","ph":"/kəˈmɪti/","p":"名词","s":"一群人被\"派\"出来，替更大的群体拿主意或办事。落点在\"受托的小组\"，不在人数。","c":"一间小会议室，七八个人围桌坐着，桌上摊着预算表，最后要在一张纸上签字：\"我们决定……\"","e":["The committee meets on the first Monday of every month.","She sits on the housing committee."]},{"w":"posture","ph":"/ˈpɒstʃə(r)/","p":"名词／动词","s":"身体摆成的样子；引申为对外摆出的\"姿态\"。两者都是\"摆出来给人看的形状\"。","c":"一个人含胸驼背坐在电脑前，肩往前塌；换成谈判桌上，一方把身体往后靠、下巴微抬——这也是 posture。","e":["Poor posture can cause back pain.","The government's posture on the talks has hardened."]},{"w":"spiral","ph":"/ˈspaɪrəl/","p":"名词／动词／形容词","s":"一圈一圈绕着中心走，每圈都比上一圈更远（或更近）。引申为\"越转越快、停不下来\"的上升或下跌。","c":"楼梯间从上往下看，台阶绕着中心一圈圈下去；或者物价像被卷进漩涡，转一圈涨一点，越转越快。","e":["The staircase winds up in a narrow spiral.","Prices spiralled after the harvest failed."]},{"w":"subtle","ph":"/ˈsʌtl/","p":"形容词","s":"差别很小、很细，不留心就漏掉；或者手段很轻，不正面来。核心是\"不显眼但有作用\"。","c":"两块几乎一样的布料，一块偏暖一点，得放在窗边才看得出；或者一个人不说\"你错了\"，只是换了个话题，事情就绕过去了。","e":["There is a subtle difference between the two words.","He took a subtle approach, never mentioning the money directly."]},{"w":"component","ph":"/kəmˈpəʊnənt/","p":"名词／形容词","s":"一台整体里的一个\"零件／组成部分\"。拿出来单看也成立，但作用要在整体里才显现。","c":"拆开一台旧收音机，电容、电阻、旋钮散在桌上；每个都能单独拿起，但只有装回去才会响。","e":["The factory makes components for electric cars.","Trust is a key component of any partnership."]},{"w":"overwhelm","ph":"/ˌəʊvəˈwelm/","p":"动词","s":"一股力量从上面压下来，量大到对方接不住、挡不住、反应不过来。","c":"水坝决口，水一下涌过来，人站都站不住；换成情绪，是一条消息突然砸过来，人坐在那儿半天说不出话。","e":["She was overwhelmed by the support she received.","The small clinic was overwhelmed by patients."]},{"w":"suite","ph":"/swiːt/","p":"名词","s":"一套配好的一组东西——房间、家具、乐曲、程序。核心是\"成套\"，不是单件。","c":"酒店走廊尽头一扇门，推开是卧室、客厅、浴室连在一起；或者客厅里沙发、单人椅、茶几风格完全一致。","e":["They booked a suite on the top floor.","The bedroom suite includes a wardrobe and two bedside tables."]},{"w":"consultant","ph":"/kənˈsʌltənt/","p":"名词","s":"被请来\"出主意\"的懂行人。他不一定动手做，但要给出判断和建议。","c":"一间会议室里，外来的人打开笔记本，听完情况后说：\"你们的问题不在预算，在流程。\"","e":["They hired a consultant to review the safety system.","She works as a consultant to the Ministry of Education."]},{"w":"disguise","ph":"/dɪsˈɡaɪz/","p":"动词／名词","s":"把原来的样子换掉，让人认不出。换的可以是外貌，也可以是事情的性质。","c":"一个人戴上假发和眼镜走进会场，熟人从旁边经过却没认出来；或者一份报告把裁员说成\"结构优化\"。","e":["He disguised himself as a security guard.","The company tried to disguise the fall in sales."]},{"w":"imperial","ph":"/ɪmˈpɪəriəl/","p":"形容词","s":"与\"帝国\"有关——皇帝的、帝国版图的，或帝国时期沿用下来的制度（尤其计量单位）。","c":"宫殿里金碧辉煌的大厅、穿礼服的卫兵；或者一把刻度是英寸的旧尺子，上面没有厘米。","e":["The city still has several imperial palaces.","The UK still uses some imperial units in daily life."]},{"w":"facet","ph":"/ˈfæsɪt/","p":"名词","s":"一个多面体上的一个平面；引申为一件事的一个侧面。看一面，不等于看全。","c":"一颗切割好的宝石在灯下转动，每转一个角度就闪一下——每个平面就是一个 facet。","e":["We looked at every facet of the problem.","The diamond has fifty-eight facets."]},{"w":"liberal","ph":"/ˈlɪbərəl/","p":"形容词／名词","s":"愿意放开——放开对别人想法的限制，放开对变革的抵制，放开手里的钱。核心是\"不收紧\"。","c":"一扇门被推得很开，人进出不用侧身；或者一个人分东西时抓一大把给你，而不是数着给。","e":["Her parents were liberal about bedtime.","He holds liberal views on immigration."]},{"w":"surgery","ph":"/ˈsɜːdʒəri/","p":"名词","s":"用刀进入身体治病这件事；在英式英语里还指医生看诊的地方和时间。","c":"手术室里一排器械，灯很亮；或者街角一间小诊所，门口写着\"周一至周五 9:00—17:00\"。","e":["She needs surgery on her knee.","The local surgery opens at eight."]},{"w":"harmony","ph":"/ˈhɑːməni/","p":"名词","s":"不同的东西放在一起不打架，反而互相成全。可以是人之间，也可以是音符之间、颜色之间。","c":"几个人合唱，声音不一样高，合起来却好听；或者一间屋子里木色、布色、光线都搭，坐着舒服。","e":["The two communities have lived in harmony for generations.","The choir sang in close harmony."]},{"w":"violent","ph":"/ˈvaɪələnt/","p":"形容词","s":"力量大到失控，可能伤人。可以是身体上的力，也可以是情绪、变化、光线的\"猛\"。","c":"一只手把杯子砸向墙壁，碎片四散；或者天忽然黑下来，风把树压弯。","e":["He became violent when he was told to leave.","A violent storm closed the port for two days."]},{"w":"resolve","ph":"/rɪˈzɒlv/","p":"动词／名词","s":"把一团纠缠的东西\"解开\"——问题解开是解决，心里的犹豫解开是下定决心。","c":"一团打结的线，手指一点点把它理顺；或者一个人犹豫了半个月，某天早上忽然把表格填了、交了。","e":["The two sides resolved the dispute without going to court.","She resolved to speak to him the next morning."]},{"w":"cozy","ph":"/ˈkəʊzi/","p":"形容词","s":"小而暖、被包住的安全感。空间不大，但让人放松。","c":"冬夜，一间小屋，暖气开着，毯子搭在腿上，窗外下着雨。","e":["The flat is small but very cozy in winter.","We had a cozy dinner for four."]},{"w":"confront","ph":"/kənˈfrʌnt/","p":"动词","s":"面对面，退不开。可以是问题摆到面前，也可以是人被当面质问。","c":"走廊上两个人正面相遇，谁也不能装作没看见；或者一份账单摊在桌上，你必须处理。","e":["The new manager confronted a long list of complaints.","She decided to confront him about the missing money."]},{"w":"dominate","ph":"/ˈdɒmɪneɪt/","p":"动词","s":"站在最高的位置，把别的人或物压下去，让它们显得次要。","c":"一间屋里所有家具都小，只有一张巨大的桌子占了大半空间；或者一场比赛，一方从头到尾控球。","e":["A few large firms dominate the market.","The cathedral dominates the old town."]},{"w":"imitate","ph":"/ˈɪmɪteɪt/","p":"动词","s":"照着别人的样子做一遍。目的可以是学、可以是逗笑，也可以是造假。","c":"小孩学大人拿筷子，动作笨拙但顺序一样；或者一个人模仿老师口音，全班笑出声。","e":["Children imitate the speech of those around them.","He can imitate our chemistry teacher perfectly."]},{"w":"deadly","ph":"/ˈdedli/","p":"形容词／副词","s":"能带来死亡，或者程度\"要命地\"强。两个方向都由\"死\"这个极点引申出来。","c":"一朵颜色很普通的小蘑菇，吃下去几小时人就没了；或者一个人说话\"要命地无聊\"，让人坐不住。","e":["The snake's bite can be deadly if untreated.","He spoke with deadly seriousness."]},{"w":"compute","ph":"/kəmˈpjuːt/","p":"动词","s":"按规则一步步算出结果——今天多半是机器在算。","c":"一行行数字被输入，机器内部灯闪几下，屏幕上跳出一个总数；人只是按下回车。","e":["The program computes the average of all the scores.","The system computes the shortest route in under a second."]},{"w":"institution","ph":"/ˌɪnstɪˈtjuːʃn/","p":"名词","s":"被长期建立起来、稳定运转的一套东西——可以是组织、建筑、制度，也可以是一个\"待久了成了标志\"的人。","c":"一栋老楼，门口挂牌，里面的人按固定流程办事，几十年没变；或者一家小店里那位收银三十年的老人。","e":["The university is one of the oldest institutions in the country.","Marriage is a social institution that varies across cultures."]},{"w":"huddle","ph":"/ˈhʌdl/","p":"动词／名词","s":"人往中间挤成一团，缩小暴露面积——为了取暖、避风、害怕，或者为了说悄悄话。","c":"冬天公交站，几个人缩着肩挤在一起；或者球赛暂停，队员围成一圈，头挨着头听战术。","e":["We huddled under the awning until the rain stopped.","The children huddled together on the cold floor."]},{"w":"skeleton","ph":"/ˈskelɪtn/","p":"名词","s":"撑起形状的那副架子。去掉血肉、去掉细节之后剩下的主干。","c":"博物馆里一副骨架立在玻璃柜中；或者一栋只搭了钢筋水泥的楼，墙还没有。","e":["The skeleton of a whale hangs in the entrance hall.","We only have a skeleton plan so far."]},{"w":"ambition","ph":"/æmˈbɪʃn/","p":"名词","s":"心里有个想去的高处，并且愿意为它使劲。可以是具体目标，也可以是那股劲本身。","c":"一个年轻人把一张地图钉在墙上，圈出想去的城市，然后开始攒钱、学语言。","e":["Her ambition is to run her own clinic.","He has plenty of ambition but no plan."]},{"w":"intersection","ph":"/ˈɪntəsekʃn/","p":"名词","s":"两条线（或两条路）穿过彼此的那个点。是\"交叉处\"，不是\"路口附近\"。","c":"两条马路十字相交，红绿灯就挂在那个交点上；或者两张纸上的直线正好在同一点穿过。","e":["Turn left at the next intersection.","The accident happened at a busy intersection."]},{"w":"exceed","ph":"/ɪkˈsiːd/","p":"动词","s":"越过一条线——数量线、权限线、期待线。核心是\"超出界限\"。","c":"汽车仪表盘的指针越过限速刻度；或者一个人把手伸过了办公桌属于自己的那一半。","e":["Do not exceed the stated dose.","He exceeded his authority by signing the contract alone."]},{"w":"implement","ph":"动词 /ˈɪmplɪment/；名词 /ˈɪmplɪmənt/","p":"动词／名词","s":"把纸上的决定变成现实里跑起来的东西。动词是\"落地执行\"，名词是\"干活的器具\"。","c":"一份通过的方案放在桌上，接下来有人排工期、分任务、开动设备——方案开始\"跑\"起来。","e":["The new rules will be implemented from January.","It took two years to implement the plan fully."]},{"w":"disperse","ph":"/dɪˈspɜːs/","p":"动词","s":"本来聚在一起的一群，向四面散开，越走越远。可以是人，也可以是雾、种子、颗粒。","c":"集会结束，人群从广场的各个出口散走；或者一阵风吹过，蒲公英的种子飘向各处。","e":["The crowd dispersed quietly after the speeches.","Police dispersed the protesters before midnight."]},{"w":"avert","ph":"/əˈvɜːt/","p":"动词","s":"在坏事发生之前把它挡开；或者把目光转开，不去看。","c":"一只手在杯子落地前把它接住；或者路上看到不想看的东西，头一转，视线移开。","e":["Quick action averted a serious accident.","The two sides talked all night to avert a strike."]},{"w":"fantasy","ph":"/ˈfæntəsi/","p":"名词","s":"心里自己搭起来的一个世界，明知道不一定成真，但待在里面舒服。","c":"一个人躺在床上，把明天可能发生的好事在脑中演一遍，越演越细，最后笑了。","e":["He lives in a fantasy where no one ever disagrees with him.","Her childhood fantasy was to become a pilot."]},{"w":"shipment","ph":"/ˈʃɪpmənt/","p":"名词","s":"把货从一地运到另一地的\"这件事\"，或者\"这一批货\"。核心是\"发出的货\"，不一定真走船。","c":"码头上集装箱被吊起装上卡车，单据上写着\"第 3 批，共 40 箱\"。","e":["Shipment usually takes about three weeks.","A shipment of masks arrived this morning."]},{"w":"vicious","ph":"/ˈvɪʃəs/","p":"形容词","s":"带着恶意去伤害，而且下手狠。比\"暴力\"多一层\"用心恶\"。","c":"一条被训练过的狗突然扑向路人，咬住不放；或者网络上成群的人用最恶毒的话围攻一个人。","e":["The dog became vicious when strangers approached.","She received a stream of vicious messages online."]},{"w":"lace","ph":"/leɪs/","p":"名词／动词","s":"细线交错成的网／带子；动词是\"用带子穿起来系紧\"，或\"往里面掺一点东西\"。","c":"婚纱袖口那层镂空的花边；或者蹲下来把鞋带穿过孔、拉紧、打结。","e":["The dress has a lace collar.","He bent down to lace his boots."]},{"w":"enormous","ph":"/ɪˈnɔːməs/","p":"形容词","s":"大到超出平常尺度，让人一时估不出量。","c":"站在船坞下抬头看一艘巨轮，人在旁边像蚂蚁。","e":["The project required an enormous amount of money.","There is enormous pressure on young doctors."]},{"w":"external","ph":"/ɪkˈstɜːnl/","p":"形容词","s":"在\"外面\"——物体表面之外、组织之外、国境之外。与 internal 相对。","c":"一栋楼，里面的房间是内部，外墙、楼道、门外的人都是 external；公司也一样，员工是内部，客户和供应商是外部。","e":["The external walls need painting.","The report was written by an external consultant."]},{"w":"gorgeous","ph":"/ˈɡɔːdʒəs/","p":"形容词","s":"好看得让人停一下。比 beautiful 更口语、更有情绪。","c":"傍晚天空整片橘红，路人纷纷停下来拍照。","e":["What a gorgeous evening!","She wore a gorgeous deep-blue dress."]},{"w":"circumstance","ph":"/ˈsɜːkəmstəns/","p":"名词","s":"围着某件事的那些条件——时间、地点、钱、他人的态度。它们不一定由你决定，但会影响结果。","c":"一场雨、一次堵车、一个临时电话，三件小事凑在一起，让原本的计划全变了。","e":["Under no circumstances should you open that door.","In the circumstances, postponing the trip was sensible."]},{"w":"authority","ph":"/ɔːˈθɒrəti/","p":"名词","s":"有资格\"说了算\"——可以是权力、许可、机构，也可以是因为懂行而被人信服的分量。","c":"一个人推门进来，所有人都停下说话，因为他有决定权；换一个场景，一位老医生开口，年轻医生都安静听，因为他是这方面的权威。","e":["She has authority over forty staff.","Only the manager has the authority to approve this."]},{"w":"erosion","ph":"/ɪˈrəʊʒn/","p":"名词","s":"一点一点被磨掉、被磨弱。速度慢，但方向单一，回不去。","c":"河岸的土被水一口口啃走，每年退一点，十年后整棵树都悬在边上。","e":["Coastal erosion has swallowed twenty metres of cliff in a decade.","The scandal led to a steady erosion of public trust."]},{"w":"ascend","ph":"/əˈsend/","p":"动词","s":"往上走。可以是人爬上去，也可以是位置、地位上升。","c":"石阶一级级向上，走到顶回头，整个城在脚下。","e":["We ascended the tower just before sunset.","The path ascends steeply from the village."]},{"w":"provided","ph":"/prəˈvaɪdɪd/","p":"连词","s":"\"只要你满足这个条件\"。它把条件摆在前面，后面才是结果。","c":"门口保安说：\"证件带齐，就能进。\"前半句是门槛，后半句是放行。","e":["You can borrow the car provided that you fill the tank.","Provided the weather holds, we'll leave at six."]},{"w":"instrument","ph":"/ˈɪnstrəmənt/","p":"名词","s":"被人用来完成某件事的\"器具\"——可以是乐器、工具、仪表，也可以是被利用的人或手段。","c":"一把小提琴、一支温度计、一把手术钳，形状完全不同，但都是\"手上的延长\"。","e":["She plays three instruments, including the cello.","The surgeon laid out the instruments before the operation."]},{"w":"medium","ph":"/ˈmiːdiəm/","p":"形容词／名词","s":"处在中间——大小居中，或者在\"发送者\"与\"接收者\"之间传递东西的通道。","c":"三件衣服排开，小号、中号、大号，你拿中间那件；或者声音从嘴到耳朵，中间靠空气这个\"介质\"。","e":["She bought a medium-sized shirt.","Television is still a powerful medium for advertising."]},{"w":"indispensable","ph":"/ˌɪndɪˈspensəbl/","p":"形容词","s":"少了它，事情就办不成。不是\"很好用\"，是\"不能没有\"。","c":"出门旅行，护照放在包最里层——别的都可以忘，这个不行。","e":["A good dictionary is indispensable for this course.","She has made herself indispensable to the team."]},{"w":"lens","ph":"/lenz/","p":"名词","s":"一块中间厚薄不同的透明片，让光线拐弯，于是东西看起来变大、变小或变清楚。","c":"把放大镜对着阳光，纸上出现一个亮点；或者相机镜头上那一圈圈玻璃。","e":["Clean the lens before you take the photo.","He wears lenses instead of glasses."]},{"w":"embody","ph":"/ɪmˈbɒdi/","p":"动词","s":"把看不见的东西\"装进身体里\"，让人一看就能看见它。","c":"一位老工匠不说话，只把手上的活做给你看——\"认真\"这个抽象品质，就在他的动作里。","e":["She embodies everything the school stands for.","These values are embodied in the constitution."]},{"w":"fatal","ph":"/ˈfeɪtl/","p":"形容词","s":"结果指向死亡或彻底失败。已经发生，或注定如此。","c":"一份诊断书上写着\"无法手术\"；或者一次判断失误，让整盘棋再没有翻盘的可能。","e":["The crash was fatal for both drivers.","One fatal error ruined the whole experiment."]},{"w":"motive","ph":"/ˈməʊtɪv/","p":"名词","s":"推着人去做某事的那个\"里面\"的原因，尤其是别人看不见的那一层。","c":"一个人主动帮忙搬东西，很热情；你后来才知道，他想借你的车。","e":["Police have not established a motive for the attack.","His motives were good, even if the result was bad."]},{"w":"envisage","ph":"/ɪnˈvɪzɪdʒ/","p":"动词","s":"在脑子里先把未来的样子\"看见\"，再据此做计划。","c":"建筑师闭上眼，能看见三年后这片空地立起的楼，连人流走向都想好了。","e":["We envisage a small team of five.","It is envisaged that the bridge will open next spring."]},{"w":"wrestle","ph":"/ˈresl/","p":"动词","s":"贴身缠斗，用身体或心力去压制一个不听话的对手／东西。","c":"两个人在垫子上互相抱住，试图把对方压下去；或者一个人跟一个拧不动的螺丝较劲，脸都红了。","e":["He wrestled with his brother on the grass.","We wrestled the sofa up the stairs."]},{"w":"motivate","ph":"/ˈməʊtɪveɪt/","p":"动词","s":"给人一个\"往前走\"的理由或劲头。可以是外部推动，也可以是内部驱动。","c":"教练在更衣室说了一段话，队员本来垂头，听完把鞋带重新系紧。","e":["She was motivated by a desire to prove them wrong.","Good teachers know how to motivate reluctant students."]},{"w":"marginal","ph":"/ˈmɑːdʒɪnl/","p":"形容词／名词","s":"处在边缘上——量很小、位置不重要、或刚好卡在界线附近。","c":"一张纸的页边空白，正文之外的那一条；或者一场选举只差几百票，胜负就悬在那条线上。","e":["The change made only a marginal difference.","She won a marginal seat by 300 votes."]},{"w":"spoil","ph":"/spɔɪl/","p":"动词／名词","s":"把本来好的东西弄坏——弄坏事情、弄坏孩子的性格、弄坏食物的可食性。","c":"一场精心准备的野餐，忽然下起雨，蛋糕淋湿了；或者孩子一哭就买玩具，最后他只会用哭来要东西。","e":["Don't spoil the ending for me.","His grandparents spoil him badly."]},{"w":"multiply","ph":"/ˈmʌltɪplaɪ/","p":"动词","s":"一份变多份，且是成倍地变。数学上是\"乘\"，生物上是\"繁殖\"，数量上是\"激增\"。","c":"一个细胞分成两个，两个分四个；或者一张纸对折再对折，层数翻着涨。","e":["Multiply the length by the width to get the area.","Problems multiplied after the budget was cut."]},{"w":"pasture","ph":"/ˈpɑːstʃə(r)/","p":"名词／动词","s":"长着草、专门给牲畜吃的地。引申为\"谋生的地盘／处境\"。","c":"一片缓坡草地，几头牛低头吃草，远处有木栅栏。","e":["The cows were moved to a fresh pasture.","After twenty years he moved on to pastures new."]},{"w":"approval","ph":"/əˈpruːvl/","p":"名词","s":"点头——要么是心里觉得\"这样好\"，要么是正式\"同意你可以做\"。","c":"一个人看完方案，微微颔首；或者文件上盖了一个章，写着\"批准\"。","e":["The plan needs the approval of the board.","She nodded in approval."]},{"w":"mobile","ph":"/ˈməʊbaɪl/","p":"形容词／名词","s":"能移动、不被固定住。名词在英式里就是\"手机\"。","c":"一张带轮子的桌子，推到哪儿用到哪儿；或者一个人边走边打电话。","e":["My mobile died halfway through the call.","The clinic runs a mobile dental service."]},{"w":"multiple","ph":"/ˈmʌltɪpl/","p":"形容词／名词","s":"不止一个——多个并存，或一件事牵涉多个部分。","c":"一份表格上盖了三个不同部门的章；或者一个人身上好几处受伤。","e":["The study found multiple causes for the decline.","Twelve is a multiple of three."]},{"w":"evolution","ph":"/ˌiːvəˈluːʃn/","p":"名词","s":"慢慢变，一点点积累，最后成了另一个样子。强调\"渐进\"，不是\"一次跳变\"。","c":"一条长长的台阶，每级只高一点，走完才发现已经站在山顶；回头看不到哪一步是\"转折点\"。","e":["The exhibition traces the evolution of the bicycle.","Evolution explains why these birds have different beaks."]},{"w":"peak","ph":"/piːk/","p":"名词／动词／形容词","s":"一座山的尖顶，或者一条曲线最高的那一点。到了顶，接下来只能往下。","c":"登山队最后几步踏上尖顶，四面都是往下；或者气温曲线在下午两点拱到最高，然后回落。","e":["She was at the peak of her career at thirty-five.","Snow covered the peaks until June."]},{"w":"magnet","ph":"/ˈmæɡnət/","p":"名词","s":"会把东西\"吸\"过来的东西。可以是物理的磁铁，也可以是人、地方、事物对人的吸引力。","c":"一堆铁钉散在桌上，一块磁铁靠近，钉子\"啪\"地立起来贴上去。","e":["The magnet held the note against the fridge door.","The old town is a magnet for photographers."]},{"w":"concentrate","ph":"/ˈkɒnsntreɪt/","p":"动词／名词","s":"把散的注意力／东西收到一个点上；或者把液体里的水分去掉，让\"有效成分\"变浓。","c":"一束散光被凸透镜聚成一个小亮点；或者一锅汤小火慢熬，水越来越少，味道越来越浓。","e":["I can't concentrate with the TV on.","The firm has concentrated its staff in one building."]},{"w":"expose","ph":"/ɪkˈspəʊz/","p":"动词","s":"把原本遮着的东西揭开，让它露在外面——露出事实，也露出身体、露出承受风险的一面。","c":"一块布被掀开，下面藏着的东西露出来；或者一个人站在风口，没有任何遮挡。","e":["The report exposed serious weaknesses in the system.","Workers were exposed to dangerous levels of dust."]},{"w":"versatile","ph":"/ˈvɜːsətaɪl/","p":"形容词","s":"一个人或一样东西能顶好几个用，换个场合照样行。","c":"一把瑞士军刀，能开瓶、能剪、能拧螺丝；或者一个演员，今天演正剧，明天演喜剧。","e":["She is a versatile player who can cover three positions.","Eggs are a versatile ingredient."]},{"w":"versus","ph":"/ˈvɜːsəs/","p":"介词","s":"把两方摆到对立面：一边对一边。","c":"球场中线两边各站一队；或者一张纸上左边写方案 A，右边写方案 B，中间一道竖线。","e":["Tonight's match is Guangzhou versus Shanghai.","We discussed the pros and cons of renting versus buying."]},{"w":"complaint","ph":"/kəmˈpleɪnt/","p":"名词","s":"心里不满，并且把它说出来。说出来的是\"一条意见\"，也可能是\"一种病\"。","c":"顾客把凉了的汤端回柜台，说\"这个不能吃\"；或者一个人捂着胃，说\"这儿老不舒服\"。","e":["We received three complaints about the noise.","She made a formal complaint against her manager."]},{"w":"permissible","ph":"/pəˈmɪsəbl/","p":"形容词","s":"规则允许这么做，不越线。它只说\"可以做\"，不说\"应该做\"。","c":"一块牌子上写着\"此处允许停车\"，旁边另一块写着\"禁止左转\"——前者就是 permissible。","e":["It is not permissible to record the interview without consent.","A small amount of error is permissible."]},{"w":"cancer","ph":"/ˈkænsə(r)/","p":"名词","s":"身体里的细胞不受控制地长，并且会蔓延到别处。引申为\"扩散得很快的坏东西\"。","c":"一棵树里有一处组织疯狂增生，越长越大，还顺着枝干蔓延到别的部分。","e":["He was treated for lung cancer last year.","The report calls corruption a cancer on public life."]},{"w":"splash","ph":"/splæʃ/","p":"动词／名词","s":"液体被撞开、四散飞溅，同时发出声音。引申为\"醒目地展示\"。","c":"一块石头砸进池塘，水花四散；或者孩子踩进水坑，裤腿溅满泥点。","e":["The children splashed water at each other.","The car splashed mud all over my coat."]},{"w":"inject","ph":"/ɪnˈdʒekt/","p":"动词","s":"用针管把东西\"推进去\"。引申为往一个系统里注入资金、活力、话题。","c":"护士把针头扎进手臂，慢慢推活塞；或者一笔钱被打进一家快撑不住的公司账户。","e":["The nurse injected the vaccine into his arm.","The government injected two billion yuan into the scheme."]},{"w":"romance","ph":"/rəʊˈmæns/","p":"名词／动词","s":"带着想象和心动的色彩——两个人的恋情，或一个地方、一段经历带来的浪漫感。","c":"雨夜的旧城石板路，灯光昏黄，两个人共一把伞；或者一本写骑士与远行的旧书。","e":["Their romance began on a train to Chengdu.","The film is a romance set in 1930s Shanghai."]},{"w":"offense","ph":"/əˈfens/","p":"名词","s":"越了线（违法），或者踩到了别人的感受。","c":"球场上一次犯规，裁判吹哨；或者一句话说完，对方脸色变了，你才意识到说重了。","e":["He was arrested for a minor offense.","She took offense at his remark."]},{"w":"atlas","ph":"/ˈætləs/","p":"名词","s":"把地图订成一本，按页翻着看世界。","c":"一本大开本硬壳书摊在桌上，左页是整片大陆，右页是细密的山脉与河流。","e":["He opened the atlas at the page for West Africa.","The anatomical atlas has detailed drawings of every muscle."]},{"w":"invisible","ph":"/ɪnˈvɪzəbl/","p":"形容词","s":"看不见——眼睛捕捉不到，或者被人当作不存在。","c":"空气里全是灰尘，光柱一照才看见；或者会议室里那个一直没人问意见的人。","e":["The scar is almost invisible now.","These bacteria are invisible to the naked eye."]},{"w":"focus","ph":"/ˈfəʊkəs/","p":"动词／名词","s":"把注意力、光线、镜头收到一个点上，让这一点清楚，其余退到背景。","c":"相机转动对焦环，画面里的一朵花忽然清晰，后面的树全糊了。","e":["Let's focus on the budget for now.","The camera refused to focus in the dark."]},{"w":"hamper","ph":"/ˈhæmpə(r)/","p":"动词／名词","s":"给前进的人挂上重物，让他走不快；名词则是装东西的大篮子。","c":"一个人抱着大箱子爬楼梯，每走一步都磕到墙；或者野餐时提着一只装满食物的藤篮。","e":["Bad weather hampered the rescue effort.","Heavy bags hampered her as she ran for the bus."]},{"w":"motel","ph":"/məʊˈtel/","p":"名词","s":"开车旅行的人住的旅店——车停在房门口，人下车就进屋。","c":"公路边一排平房，每间门口一个车位，夜里霓虹灯牌亮着\"VACANCY\"。","e":["We stopped at a motel just outside the city.","The motel has forty rooms and a small diner."]},{"w":"exaggeration","ph":"/ɪɡˌzædʒəˈreɪʃn/","p":"名词","s":"把大小、好坏、重要性往外\"拉大\"，超出实际。","c":"一条手指长的小鱼，被讲成了\"这么大\"，双手比出一臂长。","e":["It's no exaggeration to say the whole town was watching.","The figures were an exaggeration of the real growth."]},{"w":"peg","ph":"/peɡ/","p":"名词／动词","s":"插进去、卡住、把东西固定在一个位置的小东西。引申为\"把价格／人钉在某个位置\"。","c":"帐篷四角的绳子被小木桩钉进土里；或者衣绳上一只夹子把湿衣服夹住，风一吹也不掉。","e":["Hammer the pegs in at each corner of the tent.","The exchange rate has been pegged to the dollar for years."]},{"w":"myth","ph":"/mɪθ/","p":"名词","s":"一群人共同相信的故事——古代用来解释世界，现代则常指\"其实是假的\"。","c":"篝火边老人讲神如何造出山川；或者办公室里所有人都说\"这个流程必须走三遍\"，其实没人查过规定。","e":["The myth explains why the river turns red each spring.","It is a myth that we only use ten percent of our brains."]},{"w":"decisive","ph":"/dɪˈsaɪsɪv/","p":"形容词","s":"能\"一锤定音\"——要么这一步决定了结果，要么这个人下决定干脆。","c":"棋局僵持很久，一手落子，胜负已定；或者会议室里众人犹豫，一个人说\"就这么办\"，散会。","e":["Her goal in the 88th minute was decisive.","He is decisive in a crisis but slow over small choices."]},{"w":"concise","ph":"/kənˈsaɪs/","p":"形容词","s":"话不多，但该说的都在。删掉的是废话，不是内容。","c":"一张便签上五行字，把三页报告的重点说完了，没有一句客套。","e":["Please keep your answers concise.","The guide gives a concise account of the war."]},{"w":"implication","ph":"/ˌɪmplɪˈkeɪʃn/","p":"名词","s":"话没说出口，但\"折在里面\"的意思；或者一个决定往后拖出来的后果。","c":"一张纸折起来，里面夹着一张字条——字条没露出来，但确实在里面；或者一块石头扔进水里，涟漪一圈圈扩散到岸边。","e":["The decision has serious implications for rural schools.","The implication was that I had not tried hard enough."]},{"w":"thesis","ph":"/ˈθiːsɪs/","p":"名词","s":"一个要被论证的\"立场\"，或者把这个立场写成一本书那么长的论文。","c":"论文第一页写着一句话，后面两百页都在为它找证据；答辩时，评委就盯着这句话发问。","e":["She is writing her thesis on rural migration.","The book's central thesis is that cities learn faster than states."]},{"w":"bump","ph":"/bʌmp/","p":"动词／名词","s":"两样东西\"咚\"地碰一下，不重但实在；名词就是那一下，或碰出来的鼓包。","c":"推着行李箱过门槛，箱子底\"咯噔\"磕了一下；或者额头撞到柜门，第二天起了一个包。","e":["I bumped into an old classmate at the station.","He bumped his head on the low beam."]},{"w":"reservation","ph":"/ˌrezəˈveɪʃn/","p":"名词","s":"先把一样东西\"留出来\"给你——座位、房间；也可以是心里\"留着一手\"的疑虑。","c":"餐厅本子上写着你的名字和时间，那张桌子就先空着；或者签合同前，你心里还有一处没踏实。","e":["I made a reservation for two at eight.","She agreed to the plan without reservation."]},{"w":"revive","ph":"/rɪˈvaɪv/","p":"动词","s":"让已经\"没气\"的东西重新活过来——人、习惯、制度、剧目。","c":"一个人溺水被救上岸，按压几下，忽然咳出水、睁开眼；或者一间关门十年的老电影院重新亮灯。","e":["The doctors managed to revive him twice.","The council hopes to revive the night market."]},{"w":"cordial","ph":"/ˈkɔːdiəl/","p":"形容词／名词","s":"从心里（cor- 表示\"心\"）发出的友好；名词则是一种甜饮料。","c":"两个多年未见的同行见面，握手很用力，笑得真诚；或者夏天厨房里，一瓶兑了水的果汁糖浆。","e":["They gave us a cordial welcome despite the delay.","Add a little lime cordial to the water."]},{"w":"timid","ph":"/ˈtɪmɪd/","p":"形容词","s":"遇事往后缩，怕出错、怕被看见。不是不想做，是不敢。","c":"新来的学生在教室最后一排坐着，老师提问时他把头低下去，手放在桌下。","e":["He gave a timid knock at the door.","She was too timid to disagree in the meeting."]},{"w":"loyalty","ph":"/ˈlɔɪəlti/","p":"名词","s":"不管顺境逆境，都站在这一边。核心是\"持续不变的支持\"。","c":"球队连输十场，看台上那面旗还在同一个位置；或者一个人被问起老同事，只说好话。","e":["Her loyalty to the team never wavered.","The war divided families and split old loyalties."]},{"w":"dismiss","ph":"/dɪsˈmɪs/","p":"动词","s":"手一挥，让某人／某事\"出去\"——不值得一提、不必再想、不必再来上班。","c":"会上有人提了个建议，主持人说\"这个不用讨论\"，话题就过去了；或者主管把员工叫进办公室，出来时工牌已交。","e":["She dismissed the idea as impractical.","He was dismissed for repeated lateness."]},{"w":"underlying","ph":"/ˌʌndəˈlaɪɪŋ/","p":"形容词","s":"在表面之下，看不见，但撑着上面的一切。","c":"地板下面那层梁，平时看不见，可它一烂，地板就塌；或者一个人发脾气，表面是这句话，下面其实是半年来的委屈。","e":["We need to treat the underlying cause, not just the symptoms.","The underlying rock here is limestone."]},{"w":"reform","ph":"/rɪˈfɔːm/","p":"名词／动词","s":"把有毛病的制度\"重新塑形\"，让它改好；也可以指人改过自新。","c":"一间老旧的办公室，流程被重新画在白板上，多余的环节被划掉。","e":["The government promised to reform the tax system.","Land reform changed the village within five years."]},{"w":"install","ph":"/ɪnˈstɔːl/","p":"动词","s":"把一样东西\"安\"到它该在的位置，接好、能用；也可以是把人安到某个职位上。","c":"两个师傅抬着空调外机，打孔、固定、接管、通电，最后按下遥控器，冷风吹出来。","e":["They installed a new boiler last winter.","Install the app and sign in with your phone number."]},{"w":"ensue","ph":"/ɪnˈsjuː/","p":"动词","s":"前一件事刚落地，后一件事紧接着跟上来，像被带出来一样。","c":"一句话说错，房间里安静两秒，然后所有人同时开口，吵成一片。","e":["A long argument ensued.","Chaos ensued when the power failed."]},{"w":"indication","ph":"/ˌɪndɪˈkeɪʃn/","p":"名词","s":"一个\"指向\"的迹象——不能证明结论，但让人往那个方向想。","c":"仪表盘上一盏小灯亮起，你不知道具体哪里坏了，但知道该去检查了。","e":["There is no indication that the price will fall.","His silence was an indication of how angry he was."]},{"w":"bulk","ph":"/bʌlk/","p":"名词／动词","s":"一大堆东西合起来的\"主体部分\"或\"体积\"。核心是\"大而整的一块\"。","c":"一堆待洗的衣服，最上面几件是零散的，但大部分都压在下面那一大垛里。","e":["The bulk of the work is already done.","It is cheaper to buy rice in bulk."]},{"w":"bull","ph":"/bʊl/","p":"名词","s":"公牛——体量大、往前冲的那一方。由此引申出\"看涨的人\"\"胡说\"\"教皇诏书\"等互不相干的义项。","c":"一头公牛低着头，前蹄刨地，然后直冲过来；或者交易所里有人大喊\"还会涨\"。","e":["The bull lowered its head and charged.","He has been a bull on copper since spring."]},{"w":"champion","ph":"/ˈtʃæmpiən/","p":"名词／动词","s":"站在最前面的那个人——比赢了所有人，或者替一群人说话、争利益。","c":"领奖台上一个人把奖杯举过头顶；或者会议室里，一个人替没有发言权的工人反复陈情。","e":["She became world champion at nineteen.","He has long been a champion of rural schools."]},{"w":"ceramic","ph":"/səˈræmɪk/","p":"名词／形容词","s":"用黏土烧出来的东西——硬、脆、不怕水，敲起来有声。","c":"窑门打开，一排还烫手的碗，表面有釉，光一照发亮。","e":["The museum has a fine collection of Tang ceramics.","She studied ceramics in Jingdezhen."]},{"w":"queer","ph":"/kwɪə(r)/","p":"形容词／名词／动词","s":"偏离\"常规\"——这个词的历史就是\"正常之外\"的意思。今天最主要的用法与性与性别身份有关，使用时必须分清语境与对象。","c":"一条笔直的队伍旁边，有个人偏了一步站着；这一步在旧语境里叫\"奇怪\"，在今天某些社群语境里是自我认同的标签。","e":["The centre runs a support group for queer students.","Several writers describe themselves as queer."]},{"w":"successor","ph":"/səkˈsesə(r)/","p":"名词","s":"接替者——前一个人／东西退场后，站到同一个位置上的人或物。","c":"老厂长退休那天，新厂长在同一间办公室坐下，桌上还留着前任的茶杯印。","e":["She is the likely successor to the current director.","The new model is a worthy successor to the 2019 version."]},{"w":"enlightenment","ph":"/ɪnˈlaɪtnmənt/","p":"名词","s":"原来黑着，忽然被照亮，看懂了。用作专名时，指 18 世纪欧洲那场\"以理性照亮蒙昧\"的思潮。","c":"一个人摸黑走了很久，忽然有人点灯，屋里的东西一下看清了。","e":["He found sudden enlightenment in a single sentence.","The Enlightenment reshaped ideas about law and education."]},{"w":"booklet","ph":"/ˈbʊklət/","p":"名词","s":"薄薄一本、纸封面的小册子，专门讲一件事。","c":"医院候诊区架子上那一排小册子，十几页，讲怎么控制血压。","e":["The clinic gives out a free booklet on diet.","The instructions are in the booklet at the back."]},{"w":"magnificent","ph":"/mæɡˈnɪfɪsnt/","p":"形容词","s":"大到、好到让人心里\"哇\"一声，并且值得称赞。","c":"推开大门，穹顶高得看不见顶，光从彩窗落下来，人会不自觉放低声音。","e":["The view from the ridge is magnificent.","She did a magnificent job of holding the team together."]},{"w":"stagger","ph":"/ˈstæɡə(r)/","p":"动词／名词","s":"脚下不稳，一步一晃；或者被一件事打得\"站不稳\"——震惊；也可以把时间错开，让它们不撞在一起。","c":"一个人挨了一拳，后退两步，扶住墙才站住；或者早高峰被分成几个时段，人流不再挤在一处。","e":["He staggered out of the burning building.","I was staggered by the size of the bill."]},{"w":"irony","ph":"/ˈaɪrəni/","p":"名词","s":"表面与内里不一致——说的话与想说的相反，或者事情的结果与预期相反。","c":"一场大雨，消防站的屋顶却漏水；或者有人踩进坑里，还笑着说\"今天运气真好\"。","e":["The irony is that the fire station itself flooded.","There was a certain irony in his praise of punctuality—he was two hours late."]},{"w":"restrict","ph":"/rɪˈstrɪkt/","p":"动词","s":"画一个圈，把范围缩小，或者把人／物圈在里面不让乱动。","c":"一条绳把场地围起来，只留一个入口；或者房间里把活动范围划到床边一米。","e":["Please restrict your answer to two pages.","Access is restricted to staff."]},{"w":"bandage","ph":"/ˈbændɪdʒ/","p":"名词／动词","s":"一条窄布，一圈圈绕在伤处，起到保护和支撑作用。","c":"脚踝扭了，医生拿一卷白布从脚背开始往上绕，最后用别针固定。","e":["The nurse put a bandage on his wrist.","He bandaged his knee and went back on the field."]},{"w":"prevalence","ph":"/ˈprevələns/","p":"名词","s":"某种现象\"到处都有\"的程度——不是数量，而是\"普遍到什么地步\"。","c":"一张地图上，某种颜色铺开的面积越大，说明这种情况越普遍。","e":["The prevalence of myopia among children has risen sharply.","Researchers compared the prevalence of the disease in rural and urban areas."]},{"w":"scrap","ph":"/skræp/","p":"名词／动词","s":"剩下的一小片、一点；或者整件事被当作\"废的\"扔掉。","c":"桌角堆着剪剩的纸片；或者一份方案被揉成一团扔进纸篓。","e":["He wrote the number on a scrap of paper.","There is not a scrap of evidence for that claim."]},{"w":"syndrome","ph":"/ˈsɪndrəʊm/","p":"名词","s":"一组症状或行为\"总是一起出现\"，合起来构成一个可命名的模式。","c":"病历上列着五条表现，单看每条都不特别，凑在一起就有个名字。","e":["The child was born with a rare syndrome.","Many new employees suffer from impostor syndrome."]},{"w":"tow","ph":"/təʊ/","p":"动词／名词","s":"用绳或链把后面的东西\"拖着走\"。被拖的那个自己不动。","c":"一辆故障车被前车用钢索拉着，慢慢驶过路口；或者拖船拉着大船进港。","e":["The truck towed our car to the garage.","She arrived with three children in tow."]},{"w":"imperative","ph":"/ɪmˈperətɪv/","p":"形容词／名词","s":"非做不可、马上要做。词根里有\"命令\"的意味，所以也指语法上的祈使语气。","c":"一个人在漏水的船上喊：\"现在就得堵！\"——没有讨论余地。","e":["It is imperative that we respond today.","Cutting costs is now an imperative."]},{"w":"meadow","ph":"/ˈmedəʊ/","p":"名词","s":"长满草的开阔地，主要用来割草做干草，不只是随便一块草地。","c":"初夏的缓坡，草长到膝盖高，风一过整片倒下又立起，远处有人推着割草机。","e":["The meadow is cut for hay in July.","Wild flowers covered the meadow in May."]},{"w":"hitherto","ph":"/ˌhɪðəˈtuː/","p":"副词","s":"\"到现在为止\"——把时间一刀切在说话这一刻之前。","c":"一条时间线，画到\"现在\"这个点为止，前面那一段就是 hitherto 覆盖的范围。","e":["The results were better than any hitherto recorded.","Hitherto, the two sides had refused to meet."]},{"w":"energetic","ph":"/ˌenəˈdʒetɪk/","p":"形容词","s":"身上有劲、动作有活力，而且这种劲会带起周围人。","c":"一个人早上六点已经在跑步，回来还能一边做早饭一边讲笑话。","e":["She is an energetic teacher who never sits down.","The campaign got off to an energetic start."]},{"w":"haul","ph":"/hɔːl/","p":"动词／名词","s":"用很大力气把重东西拖过来；名词是\"这一趟拖回来的量\"，引申为\"收获\"。","c":"几个人合力把渔网从水里拉上船，网里全是鱼；或者把几大袋东西从楼下拖上六楼。","e":["They hauled the nets onto the boat.","He hauled himself up the last few metres."]}]</script>
+<script>
+let words = [];
+let current = 0;
+let expanded = false;
+let records = [];
+let statusMap = {};
+let currentCategory = 'all';
+let progress = { learn: {}, test: {} }; // category -> last index
+try { records = JSON.parse(localStorage.getItem('sentenceRecords') || '[]'); } catch(e) {}
+try { statusMap = JSON.parse(localStorage.getItem('wordStatus') || '{}'); } catch(e) {}
+try { progress = JSON.parse(localStorage.getItem('studyProgress') || '{"learn":{},"test":{}}'); } catch(e) {}
+
+function init() {
+  try {
+    const raw = document.getElementById('wordsData').textContent;
+    const compact = JSON.parse(raw);
+    words = compact.map(x => ({
+      word: x.w, phonetic: x.ph || '', pos: x.p, sense: x.s, scene: x.c, examples: x.e, category: 'CET6 · B001'
+    }));
+    document.getElementById('loading').style.display = 'none';
+    const dbg = document.getElementById('debug');
+    if (dbg) dbg.textContent = '已加载 ' + words.length + ' 词';
+    document.getElementById('learnMode').style.display = 'block';
+    renderLearn();
+    updateStats();
+    updateRecordCount();
+    refreshCategories();
+    // restore last learn position
+    const key = currentCategory || 'all';
+    if (progress.learn && progress.learn[key] != null) {
+      current = progress.learn[key];
+    }
+    document.getElementById('categorySelect').onchange = function() {
+      currentCategory = this.value;
+      current = 0;
+      renderLearn();
+      if (document.getElementById('listPanel').style.display === 'flex') renderList();
+    };
+    // 如果总览开着，刷新它
+    if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  } catch(e) {
+    document.getElementById('loading').textContent = '词库加载失败：' + e.message;
+  }
+}
+
+function switchMode(m) {
+  document.getElementById('modeLearn').classList.toggle('active', m==='learn');
+  document.getElementById('modeTest').classList.toggle('active', m==='test');
+  document.getElementById('learnMode').style.display = m==='learn' ? 'block' : 'none';
+  document.getElementById('testMode').classList.toggle('active', m==='test');
+  if (m==='test' && words.length) loadTest();
+}
+
+function refreshCategories() {
+  const sel = document.getElementById('categorySelect');
+  const cats = ['all', ...new Set(words.map(w => w.category || '未分类'))];
+  sel.innerHTML = cats.map(c => '<option value="' + c + '">' + (c === 'all' ? '全部分类' : c) + '</option>').join('');
+  sel.value = currentCategory;
+}
+
+function getFilteredWords() {
+  if (currentCategory === 'all') return words;
+  return words.filter(w => (w.category || '未分类') === currentCategory);
+}
+
+function renderLearn() {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  if (current >= list.length) current = 0;
+  const w = list[current];
+  document.getElementById('word').textContent = w.word;
+  document.getElementById('phonetic').textContent = w.phonetic || '';
+  document.getElementById('pos').textContent = w.pos;
+  document.getElementById('sense').textContent = w.sense || '';
+  document.getElementById('scene').textContent = w.scene || '';
+  document.getElementById('examples').innerHTML = (w.examples||[]).map(e=>'<li>'+e+'</li>').join('');
+  document.getElementById('card').classList.remove('expanded');
+  expanded = false;
+  document.getElementById('hint').style.display = 'block';
+}
+
+function playPronunciation(type) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const word = encodeURIComponent(list[current].word);
+  // type=1 美音, type=2 英音 (有道词典)
+  const audioType = type === 'uk' ? 2 : 1;
+  const url = 'https://dict.youdao.com/dictvoice?audio=' + word + '&type=' + audioType;
+  const status = document.getElementById('speakingStatus');
+  const btn = document.getElementById(type === 'uk' ? 'btnPlayUK' : 'btnPlayUS');
+
+  document.querySelectorAll('#btnPlayUK,#btnPlayUS').forEach(b => b.classList.remove('speaking'));
+  if (status) status.textContent = (type === 'uk' ? '英音' : '美音') + '加载中…';
+  if (btn) btn.classList.add('speaking');
+
+  const audio = new Audio(url);
+  audio.oncanplay = () => {
+    if (status) status.textContent = (type === 'uk' ? '英音' : '美音') + '播放中';
+  };
+  audio.onended = audio.onerror = () => {
+    if (status) status.textContent = audio.error ? '播放失败' : '';
+    if (btn) btn.classList.remove('speaking');
+  };
+  audio.play().catch(() => {
+    if (status) status.textContent = '无法播放';
+    if (btn) btn.classList.remove('speaking');
+  });
+}
+
+function toggleExpand() {
+  expanded = !expanded;
+  document.getElementById('card').classList.toggle('expanded', expanded);
+  document.getElementById('hint').style.display = expanded ? 'none' : 'block';
+}
+
+function saveProgress(mode) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const key = currentCategory || 'all';
+  progress[mode] = progress[mode] || {};
+  progress[mode][key] = current;
+  try { localStorage.setItem('studyProgress', JSON.stringify(progress)); } catch(e) {}
+}
+
+function mark(type) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const w = list[current];
+  statusMap[w.word] = type;
+  try { localStorage.setItem('wordStatus', JSON.stringify(statusMap)); } catch(e) {}
+  current = (current + 1) % list.length;
+  saveProgress('learn');
+  const today = new Date().toDateString();
+  try {
+    let todayLearn = parseInt(localStorage.getItem('todayLearn_'+today)||'0') + 1;
+    localStorage.setItem('todayLearn_'+today, todayLearn);
+  } catch(e) {}
+  updateStats();
+  renderLearn();
+}
+
+function loadTest() {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const key = currentCategory || 'all';
+  if (progress.test && progress.test[key] != null) {
+    current = progress.test[key] % list.length;
+  }
+  const w = list[current % list.length];
+  document.getElementById('testWord').textContent = w.word;
+  const tp = document.getElementById('testPhonetic');
+  if (tp) tp.textContent = w.phonetic || '';
+  document.getElementById('testPos').textContent = w.pos;
+  document.getElementById('testPrompt').textContent = w.sense;
+  document.getElementById('testExamples').innerHTML = (w.examples||[]).map(e=>'<li>'+e+'</li>').join('');
+  document.getElementById('sentenceInput').value = '';
+  document.getElementById('feedback').textContent = '';
+  updateRecordCount();
+}
+
+function judge(result) {
+  const sentence = document.getElementById('sentenceInput').value.trim();
+  const feedback = document.getElementById('feedback');
+  if (!sentence) {
+    feedback.textContent = '请先写一个句子哦～';
+    feedback.style.color = '#f59e0b';
+    return;
+  }
+  const word = document.getElementById('testWord').textContent;
+  records.push({word, sentence, judgment: result==='ok'?'还行':'不太确定', time: new Date().toLocaleString('zh-CN')});
+  try { localStorage.setItem('sentenceRecords', JSON.stringify(records)); } catch(e){}
+  feedback.textContent = (result==='ok'?'已记录：我觉得还行':'已记录：不太确定') + '（共 '+records.length+' 条）';
+  feedback.style.color = '#10b981';
+  // advance test progress
+  const list = getFilteredWords();
+  current = (current + 1) % list.length;
+  saveProgress('test');
+  updateRecordCount();
+  updateStats();
+  setTimeout(loadTest, 800);
+}
+
+function updateRecordCount() {
+  document.getElementById('recordCount').textContent = '已记录 '+records.length+' 条';
+  document.getElementById('recordCountHeader').textContent = records.length;
+}
+
+function updateStats() {
+  const today = new Date().toDateString();
+  let todayCount = '0';
+  try { todayCount = localStorage.getItem('todayLearn_'+today) || '0'; } catch(e) {}
+  const masteredFromMap = Object.values(statusMap).filter(s => s === 'mastered').length;
+  document.getElementById('todayCount').textContent = todayCount;
+  document.getElementById('masteredCount').textContent = masteredFromMap;
+  document.getElementById('recordCountHeader').textContent = records.length;
+}
+
+function exportTable() {
+  if (!records.length) { alert('还没有记录哦'); return; }
+  let md = '| 单词 | 我的句子 | 自我评判 | 时间 |\n|------|----------|----------|------|\n';
+  records.forEach(r => {
+    md += '| '+r.word+' | '+(r.sentence||'').replace(/\|/g,'\\|')+' | '+r.judgment+' | '+r.time+' |\n';
+  });
+  try {
+    const blob = new Blob([md], {type:'text/markdown'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '造句检测记录.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch(e){}
+  navigator.clipboard.writeText(md).then(()=>alert('表格已复制到剪贴板')).catch(()=>alert(md));
+}
+
+function bind(id, fn) {
+  const el = document.getElementById(id);
+  if (el) el.onclick = fn;
+}
+
+bind('modeLearn', () => switchMode('learn'));
+bind('modeTest', () => switchMode('test'));
+bind('modeProgress', openProgress);
+bind('closeProgress', () => document.getElementById('progressPanel').style.display = 'none');
+bind('modeImport', () => document.getElementById('importPanel').style.display = 'flex');
+bind('btnManageCat', openCatManage);
+bind('closeCatManage', () => document.getElementById('catManagePanel').style.display = 'none');
+bind('closeImport', () => document.getElementById('importPanel').style.display = 'none');
+bind('modeList', toggleList);
+bind('closeList', () => document.getElementById('listPanel').style.display = 'none');
+bind('btnPlayUK', () => playPronunciation('uk'));
+bind('btnPlayUS', () => playPronunciation('us'));
+bind('card', toggleExpand);
+bind('btnUncertain', () => mark('uncertain'));
+bind('btnFamiliar', () => mark('familiar'));
+bind('btnMastered', () => mark('mastered'));
+bind('btnNext', () => mark('next'));
+bind('btnOk', () => judge('ok'));
+bind('btnUnsure', () => judge('unsure'));
+bind('btnExport', exportTable);
+bind('btnDoImport', doImport);
+
+function openProgress() {
+  const container = document.getElementById('progressList');
+  container.innerHTML = '';
+  const cats = ['all', ...new Set(words.map(w => w.category || '未分类'))];
+  let hasAny = false;
+  cats.forEach(cat => {
+    const learnIdx = (progress.learn && progress.learn[cat]) || 0;
+    const testIdx = (progress.test && progress.test[cat]) || 0;
+    if (!learnIdx && !testIdx) return;
+    hasAny = true;
+    const list = cat === 'all' ? words : words.filter(w => (w.category||'未分类') === cat);
+    const learnWord = list[learnIdx] ? list[learnIdx].word : '—';
+    const testWord = list[testIdx] ? list[testIdx].word : '—';
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:12px 0;border-bottom:1px solid #f3f4f6';
+    div.innerHTML = '<div style="font-weight:600;margin-bottom:6px">' + (cat==='all'?'全部分类':cat) + '</div>' +
+      '<div style="font-size:13px;color:#555;margin-bottom:4px">卡片学习：第 ' + (learnIdx+1) + ' 个 · ' + learnWord + '</div>' +
+      '<div style="font-size:13px;color:#555;margin-bottom:8px">造句检测：第 ' + (testIdx+1) + ' 个 · ' + testWord + '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn" style="flex:1;background:#ecfdf5;color:#10b981;font-size:13px;padding:8px" data-cat="' + cat + '" data-mode="learn">继续学习</button>' +
+        '<button class="btn" style="flex:1;background:#fffbeb;color:#f59e0b;font-size:13px;padding:8px" data-cat="' + cat + '" data-mode="test">继续检测</button>' +
+      '</div>';
+    container.appendChild(div);
+  });
+  if (!hasAny) container.innerHTML = '<div style="color:#999;text-align:center;padding:30px">还没有学习记录</div>';
+  container.querySelectorAll('button[data-mode]').forEach(btn => {
+    btn.onclick = () => {
+      currentCategory = btn.dataset.cat;
+      document.getElementById('categorySelect').value = currentCategory;
+      const mode = btn.dataset.mode;
+      const idx = (progress[mode] && progress[mode][currentCategory]) || 0;
+      current = idx;
+      document.getElementById('progressPanel').style.display = 'none';
+      if (mode === 'learn') {
+        switchMode('learn');
+        renderLearn();
+      } else {
+        switchMode('test');
+        loadTest();
+      }
+    };
+  });
+  document.getElementById('progressPanel').style.display = 'flex';
+}
+
+bind('modeImport', () => document.getElementById('importPanel').style.display = 'flex');
+bind('btnManageCat', openCatManage);
+bind('closeCatManage', () => document.getElementById('catManagePanel').style.display = 'none');
+bind('btnRenameCat', () => {
+  document.getElementById('renameBox').style.display = 'block';
+  document.getElementById('mergeBox').style.display = 'none';
+  document.getElementById('newCatName').value = document.getElementById('catToEdit').value;
+  document.getElementById('newCatName').focus();
+});
+bind('btnMergeCat', () => {
+  const from = document.getElementById('catToEdit').value;
+  if (!from) return;
+  const others = [...new Set(words.map(w => w.category || '未分类'))].filter(c => c !== from);
+  const sel = document.getElementById('mergeTarget');
+  if (!others.length) {
+    document.getElementById('catManageResult').textContent = '没有其他分类可合并';
+    document.getElementById('catManageResult').style.color = '#f59e0b';
+    return;
+  }
+  sel.innerHTML = others.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  document.getElementById('mergeBox').style.display = 'block';
+  document.getElementById('renameBox').style.display = 'none';
+});
+bind('btnConfirmRename', renameCategory);
+bind('btnConfirmMerge', mergeCategory);
+
+function openCatManage() {
+  const sel = document.getElementById('catToEdit');
+  const cats = [...new Set(words.map(w => w.category || '未分类'))].filter(c => c !== 'all');
+  sel.innerHTML = cats.map(c => '<option value="' + c + '">' + c + '（' + words.filter(w => (w.category||'未分类')===c).length + '词）</option>').join('');
+  document.getElementById('catManageResult').textContent = '';
+  document.getElementById('catManagePanel').style.display = 'flex';
+}
+
+function renameCategory() {
+  const oldName = document.getElementById('catToEdit').value;
+  const newName = document.getElementById('newCatName').value.trim();
+  const resultEl = document.getElementById('catManageResult');
+  if (!oldName) { resultEl.textContent = '请先选择分类'; resultEl.style.color = '#f59e0b'; return; }
+  if (!newName || newName === oldName) { resultEl.textContent = '请输入不同的新名字'; resultEl.style.color = '#f59e0b'; return; }
+  words.forEach(w => {
+    if ((w.category || '未分类') === oldName) w.category = newName;
+  });
+  if (currentCategory === oldName) currentCategory = newName;
+  refreshCategories();
+  resultEl.textContent = '已将「' + oldName + '」改名为「' + newName + '」';
+  resultEl.style.color = '#10b981';
+  document.getElementById('renameBox').style.display = 'none';
+  openCatManage();
+  if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  renderLearn();
+}
+
+function mergeCategory() {
+  const from = document.getElementById('catToEdit').value;
+  const to = document.getElementById('mergeTarget').value;
+  const resultEl = document.getElementById('catManageResult');
+  if (!from || !to) { resultEl.textContent = '请选择要合并的分类和目标'; resultEl.style.color = '#f59e0b'; return; }
+  words.forEach(w => {
+    if ((w.category || '未分类') === from) w.category = to;
+  });
+  if (currentCategory === from) currentCategory = to;
+  refreshCategories();
+  resultEl.textContent = '已将「' + from + '」合并到「' + to + '」';
+  resultEl.style.color = '#10b981';
+  document.getElementById('mergeBox').style.display = 'none';
+  openCatManage();
+  if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  renderLearn();
+}
+
+document.getElementById('listSearch').oninput = renderList;
+document.getElementById('listFilter').onchange = renderList;
+
+function toggleList() {
+  const p = document.getElementById('listPanel');
+  p.style.display = 'flex';
+  renderList();
+}
+
+function renderList() {
+  const keyword = (document.getElementById('listSearch').value || '').toLowerCase();
+  const filter = document.getElementById('listFilter').value;
+  const container = document.getElementById('wordList');
+  container.innerHTML = '';
+  let count = 0;
+  const statusLabel = { familiar: '熟悉', uncertain: '不确定', mastered: '已掌握' };
+  const statusColor = { familiar: '#10b981', uncertain: '#f59e0b', mastered: '#8b5cf6' };
+  const list = getFilteredWords();
+
+  list.forEach((w, i) => {
+    const st = statusMap[w.word] || '';
+    if (filter === 'unmarked' && st) return;
+    if (filter !== 'all' && filter !== 'unmarked' && st !== filter) return;
+    if (keyword && !w.word.toLowerCase().includes(keyword)) return;
+
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:10px 4px;border-bottom:1px solid #f3f4f6;cursor:pointer;display:flex;justify-content:space-between;align-items:center';
+    const badge = st ? '<span style="font-size:12px;color:' + statusColor[st] + ';background:' + statusColor[st] + '22;padding:2px 8px;border-radius:999px">' + statusLabel[st] + '</span>' : '<span style="font-size:12px;color:#ccc">未标记</span>';
+    div.innerHTML = '<span><b>' + (w.word||'') + '</b> <span style="color:#888;font-size:12px">' + (w.pos||'') + '</span> <span style="color:#aaa;font-size:11px;margin-left:4px">' + (w.category||'') + '</span></span>' + badge;
+    div.onclick = () => {
+      current = i;
+      document.getElementById('listPanel').style.display = 'none';
+      switchMode('learn');
+      renderLearn();
+    };
+    container.appendChild(div);
+    count++;
+  });
+  document.getElementById('listCount').textContent = '共 ' + count + ' 词';
+  if (count === 0) container.innerHTML = '<div style="color:#999;padding:20px;text-align:center">没有匹配的单词</div>';
+}
+
+document.getElementById('importFile').onchange = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('importText').value = reader.result; };
+  reader.readAsText(file);
+};
+
+function doImport() {
+  const text = document.getElementById('importText').value.trim();
+  const resultEl = document.getElementById('importResult');
+  if (!text) { resultEl.textContent = '请先粘贴或选择文件'; resultEl.style.color = '#f59e0b'; return; }
+  const cat = prompt('请输入这个词库的分类名称（例如：雅思核心、CET4、托福等）', '新词库') || '未分类';
+  try {
+    const entries = text.split(/\n### \d{4} /).slice(1);
+    if (!entries.length) {
+      resultEl.textContent = '未识别到词条（需要 ### 0001 word 这种格式）';
+      resultEl.style.color = '#f59e0b';
+      return;
+    }
+    let added = 0;
+    entries.forEach(entry => {
+      const lines = entry.trim().split('\n');
+      const header = lines[0] || '';
+      const parts = header.split('·').map(s => s.trim());
+      const word = parts[0];
+      const pos = parts[parts.length-1] || '';
+      if (!word) return;
+      const getField = (name) => {
+        const re = new RegExp('\\*\\*' + name + '[^*]*\\*\\*\\s*([\\s\\S]*?)(?=\\n\\*\\*|\\n###|$)', 'i');
+        const m = entry.match(re);
+        return m ? m[1].trim() : '';
+      };
+      const sense = getField('核心感觉');
+      const scene = getField('想象画面');
+      const exRaw = getField('例句');
+      const examples = exRaw.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+      if (!words.some(w => w.word === word && w.category === cat)) {
+        words.push({ word, pos, sense, scene, examples, category: cat });
+        added++;
+      }
+    });
+    resultEl.textContent = '成功导入 ' + added + ' 个新词到「' + cat + '」（当前共 ' + words.length + ' 词）';
+    resultEl.style.color = '#10b981';
+    document.getElementById('importText').value = '';
+    refreshCategories();
+    if (words.length) renderLearn();
+  } catch(e) {
+    resultEl.textContent = '解析失败：' + e.message;
+    resultEl.style.color = '#ef4444';
+  }
+}
+
+init();
+
+try {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+} catch(e) {}
+</script>
+</body>
+</html>
