@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>核心意义词库</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b82f6">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="词库">
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1a1a1a;--sub:#666;--accent:#3b82f6;--familiar:#10b981;--uncertain:#f59e0b;--mastered:#8b5cf6}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:20px 16px 120px;color:var(--text)}
+header{width:100%;max-width:480px;text-align:center;margin-bottom:16px}
+header h1{font-size:18px;font-weight:600}
+.stats{font-size:13px;color:#666;margin:6px 0 10px}
+.mode-switch{display:flex;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.mode-btn{padding:8px 16px;border:none;border-radius:999px;background:#e5e7eb;font-size:14px;cursor:pointer}
+.mode-btn.active{background:var(--accent);color:#fff}
+.card-container,.test-container{width:100%;max-width:420px}
+.card{background:var(--card);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.08);min-height:320px;padding:36px 28px;cursor:pointer;user-select:none}
+.card.expanded{min-height:auto}
+.front{text-align:center;padding:40px 0 20px}
+.word{font-size:36px;font-weight:700}
+.pos{margin-top:12px;font-size:15px;color:var(--sub);background:#f0f0f0;display:inline-block;padding:4px 14px;border-radius:999px}
+.hint{margin-top:24px;font-size:13px;color:#aaa}
+.back{display:none;margin-top:20px;border-top:1px solid #eee;padding-top:20px;text-align:left}
+.card.expanded .back{display:block}
+.section-title{font-size:13px;font-weight:600;color:var(--accent);margin:16px 0 6px}
+.content{font-size:15px;line-height:1.7;color:#333}
+.examples li{margin:6px 0;font-size:14px}
+.actions{width:100%;max-width:420px;display:flex;gap:10px;margin-top:28px}
+.btn{flex:1;padding:14px 8px;border:none;border-radius:14px;font-size:15px;font-weight:600;cursor:pointer}
+@keyframes pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.25);opacity:0.7} }
+.speaking { animation: pulse 0.5s ease-in-out infinite; }
+.btn-familiar{background:#ecfdf5;color:var(--familiar)}
+.btn-uncertain{background:#fffbeb;color:var(--uncertain)}
+.btn-mastered{background:#f5f3ff;color:var(--mastered)}
+.test-container{display:none}
+.test-container.active{display:block}
+.test-card{background:var(--card);border-radius:20px;box-shadow:0 8px 30px rgba(0,0,0,.08);padding:28px 24px}
+textarea{width:100%;min-height:100px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;font-size:15px;font-family:inherit}
+.judge-btns{display:flex;gap:10px;margin-top:16px}
+.export-btn{margin-top:20px;width:100%;padding:12px;background:#111;color:#fff;border:none;border-radius:12px;font-size:14px;cursor:pointer}
+.records{margin-top:16px;font-size:13px;color:var(--sub);text-align:center}
+#loading{text-align:center;padding:40px;color:#999}
+</style>
+</head>
+<body>
+<header>
+  <h1>核心意义词库 · B001（200词）</h1>
+  <div class="stats" id="statsBar">今日学习：<span id="todayCount">0</span> · 总掌握：<span id="masteredCount">0</span> · 检测记录：<span id="recordCountHeader">0</span></div>
+  <div style="margin:6px 0 10px;display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap">
+    <select id="categorySelect" style="padding:6px 12px;border-radius:999px;border:1px solid #e5e7eb;font-size:13px;background:#fff">
+      <option value="all">全部分类</option>
+    </select>
+    <button id="btnManageCat" style="padding:6px 12px;border:none;border-radius:999px;background:#f3f4f6;font-size:13px;cursor:pointer">管理分类</button>
+  </div>
+  <div class="mode-switch">
+    <button class="mode-btn active" id="modeLearn">卡片学习</button>
+    <button class="mode-btn" id="modeTest">造句检测</button>
+    <button class="mode-btn" id="modeImport">导入词库</button>
+    <button class="mode-btn" id="modeList">词库总览</button>
+    <button class="mode-btn" id="modeProgress">学习记录</button>
+  </div>
+</header>
+
+<div id="progressPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:400px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15);max-height:70vh;overflow:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">学习记录</div>
+      <button id="closeProgress" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <div id="progressList" style="font-size:14px"></div>
+  </div>
+</div>
+
+<div id="listPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px 20px">
+  <div style="width:100%;max-width:420px;background:#fff;border-radius:16px;padding:16px;max-height:80vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;position:sticky;top:0;background:#fff;padding-bottom:8px;border-bottom:1px solid #eee;z-index:1">
+      <div style="font-size:15px;font-weight:600">单词总览 <span id="listCount" style="font-weight:400;color:#3b82f6"></span></div>
+      <button id="closeList" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <input id="listSearch" placeholder="搜索单词…" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-bottom:8px">
+    <select id="listFilter" style="width:100%;padding:6px;border-radius:8px;border:1px solid #e5e7eb;font-size:13px;margin-bottom:10px">
+      <option value="all">全部</option>
+      <option value="unmarked">未标记</option>
+      <option value="familiar">熟悉</option>
+      <option value="uncertain">不确定</option>
+      <option value="mastered">已掌握</option>
+    </select>
+    <div id="wordList" style="font-size:14px"></div>
+  </div>
+</div>
+
+<div id="catManagePanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:110;align-items:flex-start;justify-content:center;padding:40px 16px">
+  <div style="width:100%;max-width:380px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:600">管理分类</div>
+      <button id="closeCatManage" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <div style="font-size:13px;color:#666;margin-bottom:8px">选择要操作的分类：</div>
+    <select id="catToEdit" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:10px"></select>
+    <div id="renameBox" style="display:none;margin-bottom:12px">
+      <input id="newCatName" placeholder="输入新的分类名称" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;margin-bottom:8px">
+      <button id="btnConfirmRename" class="btn" style="width:100%;background:#3b82f6;color:#fff">确认改名</button>
+    </div>
+    <div id="mergeBox" style="display:none;margin-bottom:12px">
+      <div style="font-size:13px;color:#666;margin-bottom:6px">选择要合并进的目标分类：</div>
+      <select id="mergeTarget" style="width:100%;padding:8px;border-radius:8px;border:1px solid #e5e7eb;margin-bottom:8px"></select>
+      <button id="btnConfirmMerge" class="btn" style="width:100%;background:#8b5cf6;color:#fff">确认合并</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btnRenameCat" class="btn" style="flex:1;background:#3b82f6;color:#fff">改名</button>
+      <button id="btnMergeCat" class="btn" style="flex:1;background:#8b5cf6;color:#fff">合并</button>
+    </div>
+    <div id="catManageResult" style="font-size:13px;color:#10b981;min-height:20px"></div>
+  </div>
+</div>
+
+<div id="importPanel" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:flex-start;justify-content:center;padding:40px 16px 20px">
+  <div style="width:100%;max-width:420px;background:#fff;border-radius:16px;padding:20px;box-shadow:0 10px 40px rgba(0,0,0,.15)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:15px;font-weight:600">导入 Markdown 词库</div>
+      <button id="closeImport" style="border:none;background:#f3f4f6;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer">关闭</button>
+    </div>
+    <textarea id="importText" placeholder="把您的 MD 内容粘贴到这里（支持多词条）…" style="width:100%;min-height:140px;padding:10px;border:1px solid #e5e7eb;border-radius:10px;font-size:13px;font-family:monospace"></textarea>
+    <div style="margin:10px 0;font-size:12px;color:#888">或选择文件：</div>
+    <input type="file" id="importFile" accept=".md,.txt,.markdown" style="font-size:13px">
+    <button id="btnDoImport" class="btn" style="margin-top:12px;background:#111;color:#fff;width:100%">开始导入</button>
+    <div id="importResult" style="margin-top:10px;font-size:13px;color:#10b981"></div>
+  </div>
+</div>
+<div id="loading">正在加载词库…</div><div id="debug" style="font-size:12px;color:#999;text-align:center;margin:8px 0"></div>
+<div class="card-container" id="learnMode" style="display:none">
+  <div class="card" id="card">
+    <div class="front">
+      <div class="word" id="word"></div>
+      <div class="phonetic" id="phonetic" style="margin-top:6px;font-size:16px;color:#555;font-family:serif"></div>
+      <div class="pos" id="pos"></div>
+      <div style="margin-top:8px;display:flex;gap:14px;justify-content:center;align-items:center">
+        <button class="btn" id="btnPlayUK" style="width:auto;height:auto;padding:2px 4px;border:none;background:transparent;font-size:16px;color:#555;display:inline-flex;align-items:center;justify-content:center" title="英音">🔊</button>
+        <span style="font-size:11px;color:#999">英</span>
+        <button class="btn" id="btnPlayUS" style="width:auto;height:auto;padding:2px 4px;border:none;background:transparent;font-size:16px;color:#555;display:inline-flex;align-items:center;justify-content:center" title="美音">🔊</button>
+        <span style="font-size:11px;color:#999">美</span>
+        <span id="speakingStatus" style="font-size:11px;color:#3b82f6;margin-left:2px;min-width:64px"></span>
+      </div>
+      <div class="hint" id="hint">点击卡片查看核心感觉</div>
+    </div>
+    <div class="back" id="back">
+      <div class="section-title">核心感觉</div>
+      <div class="content" id="sense"></div>
+      <div class="section-title">想象画面</div>
+      <div class="content" id="scene"></div>
+      <div class="section-title">例句</div>
+      <ul class="examples" id="examples"></ul>
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn btn-uncertain" id="btnUncertain">不确定</button>
+    <button class="btn btn-familiar" id="btnFamiliar">熟悉</button>
+    <button class="btn btn-mastered" id="btnMastered">已掌握</button>
+      <button class="btn" id="btnNext" style="background:#e0e7ff;color:#3730a3">下一个</button>
+  </div>
+</div>
+<div class="test-container" id="testMode">
+  <div class="test-card">
+    <div class="word" id="testWord" style="text-align:center;font-size:28px"></div>
+    <div class="phonetic" id="testPhonetic" style="text-align:center;margin:4px 0;font-size:15px;color:#555"></div>
+    <div class="pos" id="testPos" style="display:block;text-align:center;margin:8px auto"></div>
+    <div class="section-title">提示（核心感觉）</div>
+    <div class="prompt" id="testPrompt"></div>
+    <textarea id="sentenceInput" placeholder="请根据上面的感觉，用这个单词造一个英文句子…"></textarea>
+    <div class="judge-btns">
+      <button class="btn btn-familiar" id="btnOk" style="flex:1">我觉得还行</button>
+      <button class="btn btn-uncertain" id="btnUnsure" style="flex:1">不太确定</button>
+    </div>
+    <div id="feedback" style="text-align:center;margin-top:12px;font-size:14px;min-height:20px"></div>
+    <div class="section-title" style="margin-top:20px">参考例句</div>
+    <ul class="examples" id="testExamples"></ul>
+  </div>
+  <button class="export-btn" id="btnExport">导出检测记录（表格）</button>
+  <div class="records" id="recordCount">已记录 0 条</div>
+</div>
+<script id="wordsData" type="application/json">PLACEHOLDER_WORDS</script>
+<script>
+let words = [];
+let current = 0;
+let expanded = false;
+let records = [];
+let statusMap = {};
+let currentCategory = 'all';
+let progress = { learn: {}, test: {} };
+try { records = JSON.parse(localStorage.getItem('sentenceRecords') || '[]'); } catch(e) {}
+try { statusMap = JSON.parse(localStorage.getItem('wordStatus') || '{}'); } catch(e) {}
+try { progress = JSON.parse(localStorage.getItem('studyProgress') || '{"learn":{},"test":{}}'); } catch(e) {}
+
+function init() {
+  try {
+    const raw = document.getElementById('wordsData').textContent;
+    const compact = JSON.parse(raw);
+    words = compact.map(x => ({
+      word: x.w, phonetic: x.ph || '', pos: x.p, sense: x.s, scene: x.c, examples: x.e, category: 'CET6 · B001'
+    }));
+    document.getElementById('loading').style.display = 'none';
+    const dbg = document.getElementById('debug');
+    if (dbg) dbg.textContent = '已加载 ' + words.length + ' 词';
+    document.getElementById('learnMode').style.display = 'block';
+    renderLearn();
+    updateStats();
+    updateRecordCount();
+    refreshCategories();
+    const key = currentCategory || 'all';
+    if (progress.learn && progress.learn[key] != null) {
+      current = progress.learn[key];
+    }
+    document.getElementById('categorySelect').onchange = function() {
+      currentCategory = this.value;
+      current = 0;
+      renderLearn();
+      if (document.getElementById('listPanel').style.display === 'flex') renderList();
+    };
+    if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  } catch(e) {
+    document.getElementById('loading').textContent = '词库加载失败：' + e.message;
+  }
+}
+
+function switchMode(m) {
+  document.getElementById('modeLearn').classList.toggle('active', m==='learn');
+  document.getElementById('modeTest').classList.toggle('active', m==='test');
+  document.getElementById('learnMode').style.display = m==='learn' ? 'block' : 'none';
+  document.getElementById('testMode').classList.toggle('active', m==='test');
+  if (m==='test' && words.length) loadTest();
+}
+
+function refreshCategories() {
+  const sel = document.getElementById('categorySelect');
+  const cats = ['all', ...new Set(words.map(w => w.category || '未分类'))];
+  sel.innerHTML = cats.map(c => '<option value="' + c + '">' + (c === 'all' ? '全部分类' : c) + '</option>').join('');
+  sel.value = currentCategory;
+}
+
+function getFilteredWords() {
+  if (currentCategory === 'all') return words;
+  return words.filter(w => (w.category || '未分类') === currentCategory);
+}
+
+function renderLearn() {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  if (current >= list.length) current = 0;
+  const w = list[current];
+  document.getElementById('word').textContent = w.word;
+  document.getElementById('phonetic').textContent = w.phonetic || '';
+  document.getElementById('pos').textContent = w.pos;
+  document.getElementById('sense').textContent = w.sense || '';
+  document.getElementById('scene').textContent = w.scene || '';
+  document.getElementById('examples').innerHTML = (w.examples||[]).map(e=>'<li>'+e+'</li>').join('');
+  document.getElementById('card').classList.remove('expanded');
+  expanded = false;
+  document.getElementById('hint').style.display = 'block';
+}
+
+function playPronunciation(type) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const word = encodeURIComponent(list[current].word);
+  const audioType = type === 'uk' ? 2 : 1;
+  const url = 'https://dict.youdao.com/dictvoice?audio=' + word + '&type=' + audioType;
+  const status = document.getElementById('speakingStatus');
+  const btn = document.getElementById(type === 'uk' ? 'btnPlayUK' : 'btnPlayUS');
+
+  document.querySelectorAll('#btnPlayUK,#btnPlayUS').forEach(b => b.classList.remove('speaking'));
+  if (status) status.textContent = (type === 'uk' ? '英音' : '美音') + '加载中…';
+  if (btn) btn.classList.add('speaking');
+
+  const audio = new Audio(url);
+  audio.oncanplay = () => {
+    if (status) status.textContent = (type === 'uk' ? '英音' : '美音') + '播放中';
+  };
+  audio.onended = audio.onerror = () => {
+    if (status) status.textContent = audio.error ? '播放失败' : '';
+    if (btn) btn.classList.remove('speaking');
+  };
+  audio.play().catch(() => {
+    if (status) status.textContent = '无法播放';
+    if (btn) btn.classList.remove('speaking');
+  });
+}
+
+function toggleExpand() {
+  expanded = !expanded;
+  document.getElementById('card').classList.toggle('expanded', expanded);
+  document.getElementById('hint').style.display = expanded ? 'none' : 'block';
+}
+
+function saveProgress(mode) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const key = currentCategory || 'all';
+  progress[mode] = progress[mode] || {};
+  progress[mode][key] = current;
+  try { localStorage.setItem('studyProgress', JSON.stringify(progress)); } catch(e) {}
+}
+
+function mark(type) {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const w = list[current];
+  statusMap[w.word] = type;
+  try { localStorage.setItem('wordStatus', JSON.stringify(statusMap)); } catch(e) {}
+  current = (current + 1) % list.length;
+  saveProgress('learn');
+  const today = new Date().toDateString();
+  try {
+    let todayLearn = parseInt(localStorage.getItem('todayLearn_'+today)||'0') + 1;
+    localStorage.setItem('todayLearn_'+today, todayLearn);
+  } catch(e) {}
+  updateStats();
+  renderLearn();
+}
+
+function loadTest() {
+  const list = getFilteredWords();
+  if (!list.length) return;
+  const key = currentCategory || 'all';
+  if (progress.test && progress.test[key] != null) {
+    current = progress.test[key] % list.length;
+  }
+  const w = list[current % list.length];
+  document.getElementById('testWord').textContent = w.word;
+  const tp = document.getElementById('testPhonetic');
+  if (tp) tp.textContent = w.phonetic || '';
+  document.getElementById('testPos').textContent = w.pos;
+  document.getElementById('testPrompt').textContent = w.sense;
+  document.getElementById('testExamples').innerHTML = (w.examples||[]).map(e=>'<li>'+e+'</li>').join('');
+  document.getElementById('sentenceInput').value = '';
+  document.getElementById('feedback').textContent = '';
+  updateRecordCount();
+}
+
+function judge(result) {
+  const sentence = document.getElementById('sentenceInput').value.trim();
+  const feedback = document.getElementById('feedback');
+  if (!sentence) {
+    feedback.textContent = '请先写一个句子哦～';
+    feedback.style.color = '#f59e0b';
+    return;
+  }
+  const word = document.getElementById('testWord').textContent;
+  records.push({word, sentence, judgment: result==='ok'?'还行':'不太确定', time: new Date().toLocaleString('zh-CN')});
+  try { localStorage.setItem('sentenceRecords', JSON.stringify(records)); } catch(e){}
+  feedback.textContent = (result==='ok'?'已记录：我觉得还行':'已记录：不太确定') + '（共 '+records.length+' 条）';
+  feedback.style.color = '#10b981';
+  const list = getFilteredWords();
+  current = (current + 1) % list.length;
+  saveProgress('test');
+  updateRecordCount();
+  updateStats();
+  setTimeout(loadTest, 800);
+}
+
+function updateRecordCount() {
+  document.getElementById('recordCount').textContent = '已记录 '+records.length+' 条';
+  document.getElementById('recordCountHeader').textContent = records.length;
+}
+
+function updateStats() {
+  const today = new Date().toDateString();
+  let todayCount = '0';
+  try { todayCount = localStorage.getItem('todayLearn_'+today) || '0'; } catch(e) {}
+  const masteredFromMap = Object.values(statusMap).filter(s => s === 'mastered').length;
+  document.getElementById('todayCount').textContent = todayCount;
+  document.getElementById('masteredCount').textContent = masteredFromMap;
+  document.getElementById('recordCountHeader').textContent = records.length;
+}
+
+function exportTable() {
+  if (!records.length) { alert('还没有记录哦'); return; }
+  let md = '| 单词 | 我的句子 | 自我评判 | 时间 |\n|------|----------|----------|------|\n';
+  records.forEach(r => {
+    md += '| '+r.word+' | '+(r.sentence||'').replace(/\|/g,'\\|')+' | '+r.judgment+' | '+r.time+' |\n';
+  });
+  try {
+    const blob = new Blob([md], {type:'text/markdown'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '造句检测记录.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } catch(e){}
+  navigator.clipboard.writeText(md).then(()=>alert('表格已复制到剪贴板')).catch(()=>alert(md));
+}
+
+function bind(id, fn) {
+  const el = document.getElementById(id);
+  if (el) el.onclick = fn;
+}
+
+bind('modeLearn', () => switchMode('learn'));
+bind('modeTest', () => switchMode('test'));
+bind('modeProgress', openProgress);
+bind('closeProgress', () => document.getElementById('progressPanel').style.display = 'none');
+bind('modeImport', () => document.getElementById('importPanel').style.display = 'flex');
+bind('btnManageCat', openCatManage);
+bind('closeCatManage', () => document.getElementById('catManagePanel').style.display = 'none');
+bind('closeImport', () => document.getElementById('importPanel').style.display = 'none');
+bind('modeList', toggleList);
+bind('closeList', () => document.getElementById('listPanel').style.display = 'none');
+bind('card', toggleExpand);
+bind('btnUncertain', () => mark('uncertain'));
+bind('btnFamiliar', () => mark('familiar'));
+bind('btnMastered', () => mark('mastered'));
+bind('btnNext', () => mark('next'));
+bind('btnOk', () => judge('ok'));
+bind('btnUnsure', () => judge('unsure'));
+bind('btnExport', exportTable);
+bind('btnDoImport', doImport);
+bind('btnPlayUK', () => playPronunciation('uk'));
+bind('btnPlayUS', () => playPronunciation('us'));
+
+document.getElementById('modeProgress').onclick = openProgress;
+document.getElementById('closeProgress').onclick = () => document.getElementById('progressPanel').style.display = 'none';
+
+function openProgress() {
+  const container = document.getElementById('progressList');
+  container.innerHTML = '';
+  const cats = ['all', ...new Set(words.map(w => w.category || '未分类'))];
+  let hasAny = false;
+  cats.forEach(cat => {
+    const learnIdx = (progress.learn && progress.learn[cat]) || 0;
+    const testIdx = (progress.test && progress.test[cat]) || 0;
+    if (!learnIdx && !testIdx) return;
+    hasAny = true;
+    const list = cat === 'all' ? words : words.filter(w => (w.category||'未分类') === cat);
+    const learnWord = list[learnIdx] ? list[learnIdx].word : '—';
+    const testWord = list[testIdx] ? list[testIdx].word : '—';
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:12px 0;border-bottom:1px solid #f3f4f6';
+    div.innerHTML = '<div style="font-weight:600;margin-bottom:6px">' + (cat==='all'?'全部分类':cat) + '</div>' +
+      '<div style="font-size:13px;color:#555;margin-bottom:4px">卡片学习：第 ' + (learnIdx+1) + ' 个 · ' + learnWord + '</div>' +
+      '<div style="font-size:13px;color:#555;margin-bottom:8px">造句检测：第 ' + (testIdx+1) + ' 个 · ' + testWord + '</div>' +
+      '<div style="display:flex;gap:8px">' +
+        '<button class="btn" style="flex:1;background:#ecfdf5;color:#10b981;font-size:13px;padding:8px" data-cat="' + cat + '" data-mode="learn">继续学习</button>' +
+        '<button class="btn" style="flex:1;background:#fffbeb;color:#f59e0b;font-size:13px;padding:8px" data-cat="' + cat + '" data-mode="test">继续检测</button>' +
+      '</div>';
+    container.appendChild(div);
+  });
+  if (!hasAny) container.innerHTML = '<div style="color:#999;text-align:center;padding:30px">还没有学习记录</div>';
+  container.querySelectorAll('button[data-mode]').forEach(btn => {
+    btn.onclick = () => {
+      currentCategory = btn.dataset.cat;
+      document.getElementById('categorySelect').value = currentCategory;
+      const mode = btn.dataset.mode;
+      const idx = (progress[mode] && progress[mode][currentCategory]) || 0;
+      current = idx;
+      document.getElementById('progressPanel').style.display = 'none';
+      if (mode === 'learn') {
+        switchMode('learn');
+        renderLearn();
+      } else {
+        switchMode('test');
+        loadTest();
+      }
+    };
+  });
+  document.getElementById('progressPanel').style.display = 'flex';
+}
+
+bind('modeImport', () => document.getElementById('importPanel').style.display = 'flex');
+bind('btnManageCat', openCatManage);
+bind('closeCatManage', () => document.getElementById('catManagePanel').style.display = 'none');
+bind('btnRenameCat', () => {
+  document.getElementById('renameBox').style.display = 'block';
+  document.getElementById('mergeBox').style.display = 'none';
+  document.getElementById('newCatName').value = document.getElementById('catToEdit').value;
+  document.getElementById('newCatName').focus();
+});
+bind('btnMergeCat', () => {
+  const from = document.getElementById('catToEdit').value;
+  if (!from) return;
+  const others = [...new Set(words.map(w => w.category || '未分类'))].filter(c => c !== from);
+  const sel = document.getElementById('mergeTarget');
+  if (!others.length) {
+    document.getElementById('catManageResult').textContent = '没有其他分类可合并';
+    document.getElementById('catManageResult').style.color = '#f59e0b';
+    return;
+  }
+  sel.innerHTML = others.map(c => '<option value="' + c + '">' + c + '</option>').join('');
+  document.getElementById('mergeBox').style.display = 'block';
+  document.getElementById('renameBox').style.display = 'none';
+});
+bind('btnConfirmRename', renameCategory);
+bind('btnConfirmMerge', mergeCategory);
+
+function openCatManage() {
+  const sel = document.getElementById('catToEdit');
+  const cats = [...new Set(words.map(w => w.category || '未分类'))].filter(c => c !== 'all');
+  sel.innerHTML = cats.map(c => '<option value="' + c + '">' + c + '（' + words.filter(w => (w.category||'未分类')===c).length + '词）</option>').join('');
+  document.getElementById('catManageResult').textContent = '';
+  document.getElementById('catManagePanel').style.display = 'flex';
+}
+
+function renameCategory() {
+  const oldName = document.getElementById('catToEdit').value;
+  const newName = document.getElementById('newCatName').value.trim();
+  const resultEl = document.getElementById('catManageResult');
+  if (!oldName) { resultEl.textContent = '请先选择分类'; resultEl.style.color = '#f59e0b'; return; }
+  if (!newName || newName === oldName) { resultEl.textContent = '请输入不同的新名字'; resultEl.style.color = '#f59e0b'; return; }
+  words.forEach(w => {
+    if ((w.category || '未分类') === oldName) w.category = newName;
+  });
+  if (currentCategory === oldName) currentCategory = newName;
+  refreshCategories();
+  resultEl.textContent = '已将「' + oldName + '」改名为「' + newName + '」';
+  resultEl.style.color = '#10b981';
+  document.getElementById('renameBox').style.display = 'none';
+  openCatManage();
+  if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  renderLearn();
+}
+
+function mergeCategory() {
+  const from = document.getElementById('catToEdit').value;
+  const to = document.getElementById('mergeTarget').value;
+  const resultEl = document.getElementById('catManageResult');
+  if (!from || !to) { resultEl.textContent = '请选择要合并的分类和目标'; resultEl.style.color = '#f59e0b'; return; }
+  words.forEach(w => {
+    if ((w.category || '未分类') === from) w.category = to;
+  });
+  if (currentCategory === from) currentCategory = to;
+  refreshCategories();
+  resultEl.textContent = '已将「' + from + '」合并到「' + to + '」';
+  resultEl.style.color = '#10b981';
+  document.getElementById('mergeBox').style.display = 'none';
+  openCatManage();
+  if (document.getElementById('listPanel').style.display === 'flex') renderList();
+  renderLearn();
+}
+
+document.getElementById('listSearch').oninput = renderList;
+document.getElementById('listFilter').onchange = renderList;
+
+function toggleList() {
+  const p = document.getElementById('listPanel');
+  p.style.display = 'flex';
+  renderList();
+}
+
+function renderList() {
+  const keyword = (document.getElementById('listSearch').value || '').toLowerCase();
+  const filter = document.getElementById('listFilter').value;
+  const container = document.getElementById('wordList');
+  container.innerHTML = '';
+  let count = 0;
+  const statusLabel = { familiar: '熟悉', uncertain: '不确定', mastered: '已掌握' };
+  const statusColor = { familiar: '#10b981', uncertain: '#f59e0b', mastered: '#8b5cf6' };
+  const list = getFilteredWords();
+
+  list.forEach((w, i) => {
+    const st = statusMap[w.word] || '';
+    if (filter === 'unmarked' && st) return;
+    if (filter !== 'all' && filter !== 'unmarked' && st !== filter) return;
+    if (keyword && !w.word.toLowerCase().includes(keyword)) return;
+
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:10px 4px;border-bottom:1px solid #f3f4f6;cursor:pointer;display:flex;justify-content:space-between;align-items:center';
+    const badge = st ? '<span style="font-size:12px;color:' + statusColor[st] + ';background:' + statusColor[st] + '22;padding:2px 8px;border-radius:999px">' + statusLabel[st] + '</span>' : '<span style="font-size:12px;color:#ccc">未标记</span>';
+    div.innerHTML = '<span><b>' + (w.word||'') + '</b> <span style="color:#888;font-size:12px">' + (w.pos||'') + '</span> <span style="color:#aaa;font-size:11px;margin-left:4px">' + (w.category||'') + '</span></span>' + badge;
+    div.onclick = () => {
+      current = i;
+      document.getElementById('listPanel').style.display = 'none';
+      switchMode('learn');
+      renderLearn();
+    };
+    container.appendChild(div);
+    count++;
+  });
+  document.getElementById('listCount').textContent = '共 ' + count + ' 词';
+  if (count === 0) container.innerHTML = '<div style="color:#999;padding:20px;text-align:center">没有匹配的单词</div>';
+}
+
+document.getElementById('importFile').onchange = function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => { document.getElementById('importText').value = reader.result; };
+  reader.readAsText(file);
+};
+
+function doImport() {
+  const text = document.getElementById('importText').value.trim();
+  const resultEl = document.getElementById('importResult');
+  if (!text) { resultEl.textContent = '请先粘贴或选择文件'; resultEl.style.color = '#f59e0b'; return; }
+  const cat = prompt('请输入这个词库的分类名称（例如：雅思核心、CET4、托福等）', '新词库') || '未分类';
+  try {
+    const entries = text.split(/\n### \d{4} /).slice(1);
+    if (!entries.length) {
+      resultEl.textContent = '未识别到词条（需要 ### 0001 word 这种格式）';
+      resultEl.style.color = '#f59e0b';
+      return;
+    }
+    let added = 0;
+    entries.forEach(entry => {
+      const lines = entry.trim().split('\n');
+      const header = lines[0] || '';
+      const parts = header.split('·').map(s => s.trim());
+      const word = parts[0];
+      const pos = parts[parts.length-1] || '';
+      if (!word) return;
+      const getField = (name) => {
+        const re = new RegExp('\\*\\*' + name + '[^*]*\\*\\*\\s*([\\s\\S]*?)(?=\\n\\*\\*|\\n###|$)', 'i');
+        const m = entry.match(re);
+        return m ? m[1].trim() : '';
+      };
+      const sense = getField('核心感觉');
+      const scene = getField('想象画面');
+      const exRaw = getField('例句');
+      const examples = exRaw.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean);
+      if (!words.some(w => w.word === word && w.category === cat)) {
+        words.push({ word, pos, sense, scene, examples, category: cat });
+        added++;
+      }
+    });
+    resultEl.textContent = '成功导入 ' + added + ' 个新词到「' + cat + '」（当前共 ' + words.length + ' 词）';
+    resultEl.style.color = '#10b981';
+    document.getElementById('importText').value = '';
+    refreshCategories();
+    if (words.length) renderLearn();
+  } catch(e) {
+    resultEl.textContent = '解析失败：' + e.message;
+    resultEl.style.color = '#ef4444';
+  }
+}
+
+init();
+
+try {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+} catch(e) {}
+</script>
+</body>
+</html>
